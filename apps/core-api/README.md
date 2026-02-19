@@ -75,6 +75,10 @@ Replay flow:
 1. mark failed event to DLQ (`/fail`)
 2. move dead-letter status to `READY`
 3. call replay endpoint (`/v1/ingest/bookings/events/{eventId}/replay`)
+4. worker sets DLQ lifecycle automatically:
+   - `READY -> REPLAYING` when replay accepted
+   - `REPLAYING -> SUCCEEDED` when processing succeeds
+   - `REPLAYING -> FAILED` when replay exhausts retry or non-retryable error
 
 Queue runtime:
 

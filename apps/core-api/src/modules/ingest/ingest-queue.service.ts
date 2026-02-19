@@ -111,6 +111,7 @@ export class IngestQueueService implements OnModuleInit, OnModuleDestroy {
 
     try {
       await this.ingestService.processEvent(eventId);
+      await this.ingestService.markReplaySucceeded(eventId);
       this.logger.log(`Event processed: ${eventId} attempt=${attemptNumber}`);
       return;
     } catch (error) {

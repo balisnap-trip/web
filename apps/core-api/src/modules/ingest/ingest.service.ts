@@ -424,6 +424,26 @@ export class IngestService {
     );
   }
 
+  async markReplaySucceeded(eventId: string) {
+    await this.databaseService.opsQuery(
+      `
+        update ingest_dead_letter
+        set status = 'SUCCEEDED',
+            next_replay_at = null,
+            updated_at = now()
+        where dead_letter_key = (
+          select dead_letter_key
+          from ingest_dead_letter
+          where event_key = $1
+          order by updated_at desc
+          limit 1
+        )
+          and status = 'REPLAYING'
+      `,
+      [eventId]
+    );
+  }
+
   async processEvent(eventId: string): Promise<void> {
     const event = await this.getEvent(eventId);
     const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : {};
@@ -517,9 +537,10 @@ export class IngestService {
       const existingDeadLetter = await client.query<{
         dead_letter_key: string;
         replay_count: number;
+        status: string;
       }>(
         `
-          select dead_letter_key, replay_count
+          select dead_letter_key, replay_count, status
           from ingest_dead_letter
           where event_key = $1
           order by updated_at desc
@@ -570,13 +591,15 @@ export class IngestService {
         return inserted.rows[0].dead_letter_key;
       }
 
+      const targetStatus = existingDeadLetter.rows[0].status === "REPLAYING" ? "FAILED" : "OPEN";
       const updated = await client.query<{ dead_letter_key: string }>(
         `
           update ingest_dead_letter
           set reason_code = $2,
               reason_detail = $3,
               poison_message = $4,
-              status = 'OPEN',
+              status = $5,
+              next_replay_at = null,
               last_failed_at = now(),
               updated_at = now()
           where dead_letter_key = $1
@@ -586,7 +609,8 @@ export class IngestService {
           existingDeadLetter.rows[0].dead_letter_key,
           normalizedReasonCode,
           reasonDetail,
-          poisonMessage
+          poisonMessage,
+          targetStatus
         ]
       );
 
