@@ -11,6 +11,7 @@ Scope: gate eksekusi batch A-H sebelum lanjut batch berikutnya.
    1. `reports/recon/{batch}/{timestamp}.json`,
    2. `reports/recon/{batch}/{timestamp}.md`,
    3. log deploy + rollback drill.
+4. Topologi path deploy wajib mengikuti `doc/prep-deployment-topology-strategy-2026-02-20.md`.
 
 ## 2. Gate Global (Berlaku Semua Batch)
 
@@ -70,6 +71,7 @@ Scope: gate eksekusi batch A-H sebelum lanjut batch berikutnya.
 
 | Gate | Kriteria | Pass Rule |
 |---|---|---|
+| F-00 | runtime env baseline ingestion | key wajib non-empty + parity token/secret emitter-receiver valid |
 | F-01 | event success rate | `>= 99.5%` rolling 1 jam |
 | F-02 | median/p95 processing latency | median `<= 3s`, p95 `<= 15s` |
 | F-03 | DLQ growth setelah peak | `<= 20 event/jam` selama 2 jam |
@@ -106,23 +108,27 @@ Scope: gate eksekusi batch A-H sebelum lanjut batch berikutnya.
 
 `apps/core-api` menyediakan command otomatis untuk gate ingestion:
 
-1. `F-01/F-02`:
+1. `F-00` runtime env baseline:
+   1. `pnpm gate:ingest-env-baseline`
+2. `F-01/F-02`:
    1. `pnpm --filter @bst/core-api gate:ingest-processing`
-2. `F-03`:
+3. `F-03`:
    1. `pnpm --filter @bst/core-api gate:ingest-dlq-growth`
-3. Combined evidence run:
+4. Combined evidence run:
    1. `pnpm --filter @bst/core-api gate:ingest-release`
-4. Combined release evidence (quality + ingest gates):
+5. Combined release evidence (quality + ingest gates):
    1. `pnpm --filter @bst/core-api release:evidence`
 
 Output evidence:
 
-1. `reports/gates/ingest-processing/{timestamp}.json`
-2. `reports/gates/ingest-dlq-growth/{timestamp}.json`
-3. `reports/gates/ingest-release/{timestamp}.json`
-4. `reports/gates/ingest-release/{timestamp}.md`
-5. `reports/release-evidence/{batch}/{timestamp}.json`
-6. `reports/release-evidence/{batch}/{timestamp}.md`
+1. `reports/gates/ingest-env-baseline/{timestamp}.json`
+2. `reports/gates/ingest-env-baseline/{timestamp}.md`
+3. `reports/gates/ingest-processing/{timestamp}.json`
+4. `reports/gates/ingest-dlq-growth/{timestamp}.json`
+5. `reports/gates/ingest-release/{timestamp}.json`
+6. `reports/gates/ingest-release/{timestamp}.md`
+7. `reports/release-evidence/{batch}/{timestamp}.json`
+8. `reports/release-evidence/{batch}/{timestamp}.md`
 
 Workflow automation:
 
@@ -130,6 +136,34 @@ Workflow automation:
    1. `.github/workflows/phase2-release-evidence.yml`
 2. Runbook operasional:
    1. `doc/runbook-ingest-release-gate-operations-2026-02-19.md`
+
+## 4.1.1 F-00 Runtime Env Baseline (Prasyarat Batch F)
+
+Checklist lulus `F-00`:
+
+1. jalankan command preflight:
+   1. `pnpm gate:ingest-env-baseline`.
+2. command mengembalikan:
+   1. `INGEST_ENV_BASELINE_RESULT=PASS`.
+3. report tersimpan di:
+   1. `reports/gates/ingest-env-baseline/{timestamp}.json`,
+   2. `reports/gates/ingest-env-baseline/{timestamp}.md`.
+
+4. file env core-api production valid:
+   1. `/home/bonk/backend/core-api-prod/shared/.env`.
+5. key berikut wajib non-empty:
+   1. `REDIS_URL`,
+   2. `INGEST_REDIS_URL`,
+   3. `CORE_API_ADMIN_TOKEN`,
+   4. `INGEST_SERVICE_TOKEN`,
+   5. `INGEST_SERVICE_SECRET`.
+6. parity token/secret wajib sama antara receiver (`core-api`) dan emitter (`balisnap`):
+   1. `/home/bonk/balisnaptrip/.env`,
+   2. `/home/bonk/stagging-bst/current/balisnap/.env`.
+7. evidence minimum:
+   1. timestamp verifikasi,
+   2. path env yang diverifikasi,
+   3. bukti backup `.env` sebelum perubahan.
 
 ## 4.2 Gate Automation Commands (Global G-03)
 
@@ -185,6 +219,13 @@ Rollback cepat (`G-04`) dapat dilakukan dengan:
 1. set `OPS_READ_NEW_MODEL_ENABLED=false`,
 2. set `OPS_WRITE_CORE_ENABLED=false`,
 3. atau set `*_PERCENT=0` sambil mempertahankan allowlist terbatas.
+
+Evidence deploy/rollback minimal:
+
+1. target path (`/home/bonk/stagging-bst` atau `/home/bonk/backend/core-api-prod`),
+2. `release_id` yang diaktifkan,
+3. timestamp rollback drill,
+4. hasil verifikasi `current` symlink.
 
 Verifikasi actor-level rollout:
 

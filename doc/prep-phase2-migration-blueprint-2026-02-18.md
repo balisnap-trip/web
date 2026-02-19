@@ -25,6 +25,7 @@ Mode delivery: `dual-run`, additive migration, no big-bang cutover
 4. Reconciliation report wajib lolos sebelum lanjut batch berikutnya.
 5. Cutover dilakukan per modul, bukan sekaligus seluruh sistem.
 6. DDL target wajib mengikuti `doc/prep-core-schema-target-v1-2026-02-19.md`.
+7. Topologi deploy staging/prod wajib mengikuti `doc/prep-deployment-topology-strategy-2026-02-20.md`.
 
 ## 4. Pre-Migration Readiness Checklist
 
@@ -35,6 +36,7 @@ Mode delivery: `dual-run`, additive migration, no big-bang cutover
 | Feature flags | semua flag default `OFF` di production | Backend |
 | Observability | dashboard error rate, queue lag, DLQ count, payment mismatch siap | Backend + Ops |
 | Runbook | prosedur rollback per batch disetujui | Tech lead |
+| Deployment topology | path staging/prod terkunci sesuai dokumen strategi deploy | DevOps |
 | Freeze window | jadwal deploy dan freeze disetujui owner bisnis | PM/Owner |
 
 ## 5. Feature Flags dan Default

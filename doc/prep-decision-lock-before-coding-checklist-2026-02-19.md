@@ -30,6 +30,7 @@ Status legend:
 | D-08 | P1 | Scope hard-cut vs deprecation | hard-cut hanya internal non-versioned; public API versioned pakai deprecation | Owner + Tech Lead | 2026-02-20 | LOCKED |
 | D-09 | P1 | `package_id` polymorphic safety | wajib `packageRefType` + `packageRefKey`; sunset 2026-09-30 | Owner + Product | 2026-02-21 | LOCKED |
 | D-10 | P1 | Monorepo tooling lock | pnpm + Turborepo + Changesets | Tech Lead | 2026-02-19 | LOCKED |
+| D-11 | P1 | Deployment topology path lock | staging `/home/bonk/stagging-bst`, core-api prod `/home/bonk/backend/core-api-prod`, no `masterbst` alias | DevOps + Tech Lead | 2026-02-20 | LOCKED |
 
 ## 2. Dampak Jika Tidak Lock
 
@@ -41,6 +42,8 @@ Status legend:
    1. dual-write bisa menciptakan drift yang sulit direkonsiliasi.
 4. D-08/D-09 gagal lock:
    1. konflik policy API dan ambiguity `package_id` terus berulang.
+5. D-11 gagal lock:
+   1. target deploy staging/prod ambigu dan rollback evidence sulit diaudit.
 
 ## 3. Rekomendasi Eksekusi
 
@@ -63,3 +66,5 @@ Status legend:
    10. `doc/sql-templates/phase2/091_retention_cleanup.sql`.
 2. Release gate per batch:
    1. `doc/prep-release-gate-checklist-phase2-2026-02-19.md`.
+3. Deployment topology strategy:
+   1. `doc/prep-deployment-topology-strategy-2026-02-20.md`.

@@ -1,7 +1,8 @@
 # Ingest Release Gate Operations Runbook
 
 Tanggal: 2026-02-19  
-Scope: operasi gate ingestion (`F-01`, `F-02`, `F-03`) + quality evidence phase-2.
+Update terakhir: 2026-02-20  
+Scope: operasi gate ingestion (`F-00` s.d. `F-05`) + quality evidence phase-2.
 
 ## 1. Tujuan
 
@@ -14,25 +15,47 @@ Scope: operasi gate ingestion (`F-01`, `F-02`, `F-03`) + quality evidence phase-
 1. Service `core-api` reachable.
 2. Redis + queue runtime aktif (untuk observability queue).
 3. Akses DB `ops_db` (untuk quality check).
+4. Target deploy path mengikuti `doc/prep-deployment-topology-strategy-2026-02-20.md`.
 
 Environment penting:
 
 1. `CORE_API_BASE_URL`
 2. `CORE_API_ADMIN_TOKEN`
-3. `OPS_DB_URL`
-4. `PHASE2_BATCH_CODE`
+3. `INGEST_SERVICE_TOKEN`
+4. `INGEST_SERVICE_SECRET`
+5. `REDIS_URL`
+6. `INGEST_REDIS_URL`
+7. `OPS_DB_URL`
+8. `PHASE2_BATCH_CODE`
+9. `WEB_EMIT_BOOKING_EVENT_ENABLED`
+
+## 2.1 Status Env Runtime (2026-02-20)
+
+1. Nilai `CORE_API_ADMIN_TOKEN`, `INGEST_SERVICE_TOKEN`, dan `INGEST_SERVICE_SECRET` sudah dibootstrap di runtime core-api.
+2. `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` sudah disinkronkan ke env `balisnaptrip` production existing dan staging current release.
+3. Nilai secret tidak ditaruh di dokumen; validasi dilakukan langsung di runtime `.env` dan workflow secret.
 
 ## 3. Jalur Eksekusi Lokal
 
-1. Quality check data:
+1. Preflight runtime env baseline (`F-00`):
+   1. `pnpm gate:ingest-env-baseline`
+2. Quality check data:
    1. `pnpm --filter @bst/core-api quality:phase2`
-2. Ingest gates:
+3. Ingest gates:
    1. `pnpm --filter @bst/core-api gate:ingest-processing`
    2. `pnpm --filter @bst/core-api gate:ingest-dlq-growth`
-3. Combined ingest gates:
+4. Combined ingest gates:
    1. `pnpm --filter @bst/core-api gate:ingest-release`
-4. Combined release evidence:
+5. Combined release evidence:
    1. `pnpm --filter @bst/core-api release:evidence`
+
+## 3.1 Preflight Wajib Sebelum Gate
+
+1. Jalankan `pnpm gate:ingest-env-baseline` sampai hasil `INGEST_ENV_BASELINE_RESULT=PASS`.
+2. Verifikasi semua key env penting tidak kosong.
+3. Verifikasi `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` di emitter (`balisnap`) sama dengan penerima (`core-api`).
+4. Verifikasi `WEB_EMIT_BOOKING_EVENT_ENABLED=false` jika belum masuk window aktivasi bertahap.
+5. Setelah update env, lakukan restart/reload process sebelum menjalankan gate.
 
 ## 4. Jalur Eksekusi CI (Manual Dispatch)
 
@@ -49,11 +72,12 @@ Environment penting:
 
 ## 5. Lokasi Evidence
 
-1. `reports/gates/ingest-processing/*`
-2. `reports/gates/ingest-dlq-growth/*`
-3. `reports/gates/ingest-release/*`
-4. `reports/recon/quality/{batch}/*`
-5. `reports/release-evidence/{batch}/*`
+1. `reports/gates/ingest-env-baseline/*`
+2. `reports/gates/ingest-processing/*`
+3. `reports/gates/ingest-dlq-growth/*`
+4. `reports/gates/ingest-release/*`
+5. `reports/recon/quality/{batch}/*`
+6. `reports/release-evidence/{batch}/*`
 
 ## 6. Checklist Go/No-Go Singkat
 
@@ -81,6 +105,12 @@ Environment penting:
    1. baca report `reports/recon/quality/{batch}/*.md`,
    2. prioritaskan duplicate identity dan payment orphan,
    3. jalankan rekonsiliasi ulang setelah corrective action.
+6. `INVALID_INGEST_SIGNATURE`:
+   1. pastikan `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` sama di sisi emitter dan receiver,
+   2. pastikan tidak ada whitespace/karakter tersembunyi pada nilai token/secret.
+7. `QUEUE_REDIS_UNREACHABLE`:
+   1. cek `REDIS_URL` dan `INGEST_REDIS_URL`,
+   2. cek proses Redis aktif dan dapat diakses dari host runtime core-api.
 
 ## 8. Escalation
 

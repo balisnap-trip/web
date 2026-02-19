@@ -18,7 +18,11 @@ run(
     config,
     `set -eu
 echo "CURRENT:"
-readlink -f ${qRemoteBase}/current 2>/dev/null || echo "(current belum diset)"
+if [ -e ${qRemoteBase}/current ] || [ -L ${qRemoteBase}/current ]; then
+  readlink -f ${qRemoteBase}/current
+else
+  echo "(current belum diset)"
+fi
 echo
 echo "RELEASES:"
 if [ -d ${qRemoteBase}/releases ]; then

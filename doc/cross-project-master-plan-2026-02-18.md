@@ -313,3 +313,6 @@ Exit criteria:
 3. reconciliation reports.
 4. test evidence (unit/integration/e2e).
 5. release checklist + rollback checklist.
+6. deploy topology + runbook staging/prod:
+   1. `doc/prep-deployment-topology-strategy-2026-02-20.md`,
+   2. `doc/runbook-stagging-core-api-deploy-2026-02-20.md`.

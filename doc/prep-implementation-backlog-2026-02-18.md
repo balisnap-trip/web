@@ -73,6 +73,7 @@ Status: aktif
 | T-001-02 | setup shared tsconfig/eslint/prettier | aturan linting konsisten | lint pass semua workspace |
 | T-001-03 | setup CI pipeline basic | workflow build + test | pipeline hijau pada branch utama |
 | T-001-04 | setup environment template | `.env.example` per app | tidak ada secret hardcoded |
+| T-001-05 | lock deployment topology staging/prod | dokumen strategi path deploy + rollback aktif | path server dan command deploy konsisten di runbook |
 
 ### EP-002 Core API Skeleton
 
@@ -260,3 +261,21 @@ Status: aktif
 3. Migration/reconciliation log jika ada data change.
 4. Release note + rollback note.
 5. Approval record dari owner/tech lead untuk milestone terkait.
+6. Bukti deploy topology mengikuti `doc/prep-deployment-topology-strategy-2026-02-20.md`.
+
+## 11. Progress Snapshot (2026-02-20)
+
+| Item | Status | Evidence |
+|---|---|---|
+| T-001-05 lock deployment topology staging/prod | `DONE` | `doc/prep-deployment-topology-strategy-2026-02-20.md` + `doc/runbook-stagging-core-api-deploy-2026-02-20.md` |
+| Bootstrap env core-api prod (`REDIS_URL`, `INGEST_REDIS_URL`, `CORE_API_ADMIN_TOKEN`, `INGEST_SERVICE_TOKEN`, `INGEST_SERVICE_SECRET`) | `DONE` | runtime `.env` di `/home/bonk/backend/core-api-prod/shared/.env` |
+| Sync `INGEST_SERVICE_TOKEN` + `INGEST_SERVICE_SECRET` ke emitter env | `DONE` | `/home/bonk/balisnaptrip/.env` + `/home/bonk/stagging-bst/current/balisnap/.env` |
+| Otomasi gate `F-00` runtime env baseline | `DONE` | `pnpm gate:ingest-env-baseline` + report `reports/gates/ingest-env-baseline/*` |
+| Smoke test ingest handshake setelah reload process | `TODO` | wajib dicatat di release gate Batch F (`F-00`/`F-01`) |
+
+## 12. Immediate Next Action
+
+1. Jalankan `pnpm gate:ingest-env-baseline` sampai `PASS`.
+2. Verifikasi reload process untuk runtime yang membaca env terbaru.
+3. Jalankan smoke test ingest (signature + auth) dan simpan evidence.
+4. Lanjutkan gate otomatis `gate:ingest-release` jika preflight env `PASS`.

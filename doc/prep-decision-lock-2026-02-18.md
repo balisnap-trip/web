@@ -282,6 +282,22 @@ Tanggal update: 2026-02-19.
    1. EP-001 tidak lagi ambigu tooling,
    2. setup dev/CI lintas app konsisten.
 
+## ADR-023: Deployment Topology Path Lock
+
+Tanggal update: 2026-02-20.
+
+1. Keputusan:
+   1. path staging resmi: `/home/bonk/stagging-bst`,
+   2. path production core-api resmi: `/home/bonk/backend/core-api-prod`,
+   3. `/home/bonk/masterbst` tidak dipakai lagi sebagai alias/symlink.
+2. Aturan:
+   1. release layout wajib `releases + current + shared + logs`,
+   2. `.env` core-api production wajib di `/home/bonk/backend/core-api-prod/shared/.env`,
+   3. semua runbook/gate deploy harus merujuk path resmi ini.
+3. Dampak:
+   1. mengurangi ambiguity target deploy staging/prod,
+   2. evidence deploy/rollback lebih konsisten lintas tim.
+
 ## Gate Conditions
 
 ## Go Criteria

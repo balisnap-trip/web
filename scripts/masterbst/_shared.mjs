@@ -8,7 +8,7 @@ const DEFAULTS = {
   serverHost: "192.168.0.60",
   serverUser: "bonk",
   sshKeyPath: path.join(os.homedir(), ".ssh", "bonk_codex_20260220012842_nopass"),
-  remoteBase: "/home/bonk/masterbst"
+  remoteBase: "/home/bonk/stagging-bst"
 };
 
 function parseArgMap(argv) {
