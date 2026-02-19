@@ -92,6 +92,23 @@ Retention runtime:
   - dead-letter resolved/closed: 30 days
   - unmapped queue resolved/closed: 90 days
 
+## Ingest Smoke Test
+
+Run contract smoke test against a running server:
+
+```bash
+set CORE_API_BASE_URL=http://localhost:4000
+pnpm --filter @bst/core-api smoke:ingest-contract
+```
+
+The smoke script will:
+
+1. send a signed ingest event
+2. fetch event status
+3. force event to DLQ
+4. move DLQ status to `READY`
+5. replay the event
+
 ## Error Envelope
 
 HTTP errors are wrapped with:

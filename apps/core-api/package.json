@@ -8,6 +8,7 @@
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
     "migrate:phase2": "node scripts/phase2-migrate.mjs",
+    "smoke:ingest-contract": "node scripts/ingest-contract-smoke.mjs",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "echo \"No tests yet\""
