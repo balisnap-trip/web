@@ -147,6 +147,23 @@ Workflow automation:
 1. GitHub manual workflow:
    1. `.github/workflows/api-health-gate.yml`
 
+## 4.3 Reconciliation Daily Automation (T-011-03)
+
+`apps/core-api` menyediakan command otomatis untuk observability mismatch per domain:
+
+1. Daily reconciliation report:
+   1. `pnpm --filter @bst/core-api report:reconciliation-daily`
+
+Output evidence:
+
+1. `reports/recon/daily/{timestamp}.json`
+2. `reports/recon/daily/{timestamp}.md`
+
+Workflow automation:
+
+1. GitHub schedule + manual workflow:
+   1. `.github/workflows/reconciliation-daily-report.yml`
+
 ## 5. Gate Result Template
 
 ```md

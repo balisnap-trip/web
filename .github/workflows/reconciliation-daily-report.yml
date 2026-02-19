@@ -1,0 +1,86 @@
+name: Reconciliation Daily Report
+
+on:
+  schedule:
+    - cron: "15 0 * * *"
+  workflow_dispatch:
+    inputs:
+      core_api_base_url:
+        description: "Override CORE_API_BASE_URL target (optional)"
+        required: false
+        default: ""
+        type: string
+      recon_report_fail_on_checks:
+        description: "Fail workflow when reconciliation checks fail"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  reconciliation-daily-report:
+    name: Run Reconciliation Daily Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CORE_API_ADMIN_ROLE: ADMIN
+      RECON_REPORT_REQUEST_TIMEOUT_MS: 15000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Resolve runtime config
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.core_api_base_url }}" ]; then
+            echo "CORE_API_BASE_URL=${{ inputs.core_api_base_url }}" >> "$GITHUB_ENV"
+          else
+            echo "CORE_API_BASE_URL=${{ vars.CORE_API_BASE_URL }}" >> "$GITHUB_ENV"
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "RECON_REPORT_FAIL_ON_CHECKS=${{ inputs.recon_report_fail_on_checks }}" >> "$GITHUB_ENV"
+          else
+            echo "RECON_REPORT_FAIL_ON_CHECKS=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Validate required runtime config
+        run: |
+          if [ -z "$CORE_API_BASE_URL" ]; then
+            echo "Missing CORE_API_BASE_URL (set repository variable or manual input)"
+            exit 1
+          fi
+          if [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run reconciliation daily report
+        id: run_report
+        run: pnpm --filter @bst/core-api report:reconciliation-daily
+        continue-on-error: true
+
+      - name: Upload reconciliation report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reconciliation-daily-reports
+          if-no-files-found: warn
+          path: reports/recon/daily/**
+
+      - name: Mark workflow failed when report gate fails
+        if: steps.run_report.outcome != 'success'
+        run: exit 1

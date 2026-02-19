@@ -88,6 +88,69 @@ export interface CoreIngestProcessingMetrics {
   }
 }
 
+export interface CoreReconciliationMetrics {
+  generatedAt: string
+  result: 'PASS' | 'FAIL'
+  thresholds: {
+    maxGlobalMismatchRatio: number
+    maxOpsDoneNotPaidRatio: number
+    maxUnmappedRatioPercent: number
+  }
+  metrics: {
+    bookingCoreTotalRows: number
+    bookingCoreNullIdentity: number
+    bookingCoreDuplicateIdentityGroups: number
+    bookingCoreDuplicateIdentityExcessRows: number
+    paymentEventTotalRows: number
+    paymentOrphanRows: number
+    opsDoneTotal: number
+    opsDoneNotPaid: number
+    opsDoneNotPaidRatio: number
+    ingestEventTotalRows: number
+    ingestSecondaryDedupDuplicateGroups: number
+    ingestSecondaryDedupExcessRows: number
+    unmappedRows: number
+    totalCatalogEntities: number
+    unmappedRatioPercent: number | null
+    globalMismatchRatio: number
+  }
+  domains: {
+    booking: {
+      mismatchRows: number
+      denominator: number
+      ratio: number | null
+      thresholdRatio: number | null
+      passed: boolean
+    }
+    payment: {
+      mismatchRows: number
+      denominator: number
+      ratio: number | null
+      thresholdRatio: number | null
+      passed: boolean
+    }
+    ingest: {
+      mismatchRows: number
+      denominator: number
+      ratio: number | null
+      thresholdRatio: number | null
+      passed: boolean
+    }
+    catalog: {
+      mismatchRows: number
+      denominator: number
+      ratio: number | null
+      thresholdRatio: number | null
+      passed: boolean
+    }
+  }
+  checks: Array<{
+    name: string
+    passed: boolean
+    detail: string
+  }>
+}
+
 const DEFAULT_TIMEOUT_MS = 8000
 
 const readBoolean = (raw: string | undefined, fallback: boolean) => {
@@ -279,3 +342,6 @@ export const fetchCoreIngestProcessingMetrics = async (windowMinutes = 60) =>
   requestCoreApi<CoreIngestProcessingMetrics>(
     `/v1/ingest/metrics/processing?windowMinutes=${encodeURIComponent(String(windowMinutes))}`
   )
+
+export const fetchCoreReconciliationMetrics = async () =>
+  requestCoreApi<CoreReconciliationMetrics>('/v1/metrics/reconciliation')

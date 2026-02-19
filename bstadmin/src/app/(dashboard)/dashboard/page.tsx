@@ -109,6 +109,26 @@ interface CoreApiDashboardMetrics {
     } | null
     error: string | null
   }
+  reconciliation: {
+    ok: boolean
+    status: number
+    data: {
+      result: 'PASS' | 'FAIL'
+      metrics: {
+        globalMismatchRatio: number
+        opsDoneNotPaidRatio: number
+        paymentOrphanRows: number
+        unmappedRatioPercent: number | null
+      }
+      domains: {
+        booking: { mismatchRows: number }
+        payment: { mismatchRows: number }
+        ingest: { mismatchRows: number }
+        catalog: { mismatchRows: number }
+      }
+    } | null
+    error: string | null
+  }
 }
 
 const SOURCE_COLORS: Record<string, string> = {
@@ -288,7 +308,7 @@ export default function DashboardPage() {
         </div>
 
         {coreMetrics ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-lg border bg-white p-3">
               <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">API 5xx Rate</div>
               <div className={`text-xl font-bold mt-1 ${
@@ -328,6 +348,23 @@ export default function DashboardPage() {
               </div>
               <div className="text-xs text-gray-500 mt-1">
                 p95: {Math.round(coreMetrics.ingestProcessing.data?.latenciesMs.p95 || 0)} ms
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-white p-3">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Reconciliation</div>
+              <div className={`text-xl font-bold mt-1 ${
+                (coreMetrics.reconciliation.data?.metrics.globalMismatchRatio || 0) > 0.01
+                  ? 'text-red-600'
+                  : 'text-green-600'
+              }`}>
+                {((coreMetrics.reconciliation.data?.metrics.globalMismatchRatio || 0) * 100).toFixed(2)}%
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                {coreMetrics.reconciliation.data?.result || (coreMetrics.reconciliation.ok ? 'OK' : `ERR (${coreMetrics.reconciliation.status})`)}
+              </div>
+              <div className="text-[11px] text-gray-500 mt-1">
+                orphan payment: {coreMetrics.reconciliation.data?.metrics.paymentOrphanRows || 0}
               </div>
             </div>
           </div>

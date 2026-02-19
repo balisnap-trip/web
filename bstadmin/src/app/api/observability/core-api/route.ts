@@ -5,6 +5,7 @@ import {
   fetchCoreApiRequestMetrics,
   fetchCoreIngestProcessingMetrics,
   fetchCoreIngestQueueMetrics,
+  fetchCoreReconciliationMetrics,
 } from '@/lib/integrations/core-api-ops'
 
 /**
@@ -29,10 +30,11 @@ export async function GET(req: NextRequest) {
       ? Number(processingWindowParam)
       : 60
 
-    const [apiMetrics, queueMetrics, processingMetrics] = await Promise.all([
+    const [apiMetrics, queueMetrics, processingMetrics, reconciliationMetrics] = await Promise.all([
       fetchCoreApiRequestMetrics(windowMinutes),
       fetchCoreIngestQueueMetrics(),
       fetchCoreIngestProcessingMetrics(processingWindowMinutes),
+      fetchCoreReconciliationMetrics(),
     ])
 
     return NextResponse.json({
@@ -54,6 +56,12 @@ export async function GET(req: NextRequest) {
           status: processingMetrics.status,
           data: processingMetrics.data,
           error: processingMetrics.error,
+        },
+        reconciliation: {
+          ok: reconciliationMetrics.ok,
+          status: reconciliationMetrics.status,
+          data: reconciliationMetrics.data,
+          error: reconciliationMetrics.error,
         },
       },
     })

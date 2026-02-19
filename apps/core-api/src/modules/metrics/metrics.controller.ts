@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiHeader, ApiOperation, ApiQuery, ApiTags } from "@nest
 import { RequireAdminRoles } from "../../common/auth/admin-auth.decorator";
 import { AdminAuthGuard } from "../../common/auth/admin-auth.guard";
 import { successEnvelope } from "../../common/http/envelope";
+import { ReconciliationMetricsService } from "./reconciliation-metrics.service";
 import { RequestMetricsService } from "./request-metrics.service";
 
 @ApiTags("metrics")
@@ -12,7 +13,10 @@ import { RequestMetricsService } from "./request-metrics.service";
 @RequireAdminRoles("ADMIN", "STAFF", "MANAGER")
 @Controller("v1/metrics")
 export class MetricsController {
-  constructor(private readonly requestMetricsService: RequestMetricsService) {}
+  constructor(
+    private readonly requestMetricsService: RequestMetricsService,
+    private readonly reconciliationMetricsService: ReconciliationMetricsService
+  ) {}
 
   @Get("api")
   @ApiOperation({ summary: "Get API request metrics (latency, status rates, throughput)" })
@@ -23,5 +27,11 @@ export class MetricsController {
       : undefined;
 
     return successEnvelope(this.requestMetricsService.getApiRequestMetrics(parsedWindowMinutes));
+  }
+
+  @Get("reconciliation")
+  @ApiOperation({ summary: "Get reconciliation metrics across booking/payment/ingest/catalog domains" })
+  async getReconciliationMetrics() {
+    return successEnvelope(await this.reconciliationMetricsService.getSnapshot());
   }
 }

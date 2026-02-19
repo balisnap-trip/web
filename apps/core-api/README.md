@@ -7,6 +7,8 @@ NestJS baseline service for the unified booking core domain.
 - `GET /health`
 - `GET /health/db`
 - `GET /docs`
+- `GET /v1/metrics/api?windowMinutes=15`
+- `GET /v1/metrics/reconciliation`
 
 ## Run
 
@@ -135,6 +137,7 @@ Dead-letter operations:
 - `GET /v1/ingest/metrics/queue` (queue depth + DLQ status metrics)
 - `GET /v1/ingest/metrics/processing?windowMinutes=60` (rolling success rate + latency)
 - `GET /v1/metrics/api?windowMinutes=15` (API status code rates + latency + throughput)
+- `GET /v1/metrics/reconciliation` (mismatch metrics per booking/payment/ingest/catalog + global ratio)
 
 Replay flow:
 
@@ -317,6 +320,36 @@ CI execution:
 
 - GitHub Actions manual workflow: `.github/workflows/api-health-gate.yml`
 - workflow membutuhkan secret repository `CORE_API_ADMIN_TOKEN`
+
+## Reconciliation Daily Report (T-011-03)
+
+Run automated reconciliation report dari endpoint runtime observability:
+
+```bash
+set CORE_API_BASE_URL=http://localhost:4000
+set CORE_API_ADMIN_TOKEN=dev-admin-token
+set RECON_REPORT_FAIL_ON_CHECKS=true
+pnpm --filter @bst/core-api report:reconciliation-daily
+```
+
+Output evidence:
+
+- `reports/recon/daily/{timestamp}.json`
+- `reports/recon/daily/{timestamp}.md`
+
+Optional thresholds/config:
+
+- `RECON_MAX_GLOBAL_MISMATCH_RATIO` (default `0.01`)
+- `QUALITY_MAX_OPS_DONE_NOT_PAID_RATIO` (default `0.01`)
+- `QUALITY_MAX_UNMAPPED_RATIO_PERCENT` (default `5`)
+- `RECON_REPORT_REQUEST_TIMEOUT_MS` (default `10000`)
+
+CI execution:
+
+- GitHub Actions schedule + manual workflow: `.github/workflows/reconciliation-daily-report.yml`
+- workflow membutuhkan:
+  - secret `CORE_API_ADMIN_TOKEN`
+  - variable repository `CORE_API_BASE_URL` (untuk mode schedule)
 
 ## Ingest Release Gate Runner
 
