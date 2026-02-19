@@ -1,0 +1,270 @@
+import { readFileSync } from "fs";
+import { readdir } from "fs/promises";
+import { createHash, randomUUID } from "crypto";
+import path from "path";
+import { fileURLToPath } from "url";
+import pg from "pg";
+
+const { Client } = pg;
+
+const SCRIPT_ORDER = [
+  "000_precheck_readiness.sql",
+  "001_create_core_bridge_tables.sql",
+  "002_add_indexes_and_unique_constraints.sql",
+  "003_seed_required_enums_and_checks.sql",
+  "010_seed_channel_registry.sql",
+  "011_seed_status_dictionary.sql",
+  "012_seed_package_ref_type_dictionary.sql",
+  "090_postcheck_reconciliation.sql",
+  "091_retention_cleanup.sql"
+];
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const phase2Dir = path.resolve(__dirname, "../../../doc/sql-templates/phase2");
+
+function sha256Hex(input) {
+  return createHash("sha256").update(input).digest("hex");
+}
+
+function toNumberOrNull(raw) {
+  if (!raw) {
+    return null;
+  }
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function applyPrecheckInputs(sqlText) {
+  const diskTotalBytes = toNumberOrNull(process.env.PRECHECK_DISK_TOTAL_BYTES);
+  const diskUsedBytes = toNumberOrNull(process.env.PRECHECK_DISK_USED_BYTES);
+
+  const totalReplacement = diskTotalBytes === null ? "null" : String(diskTotalBytes);
+  const usedReplacement = diskUsedBytes === null ? "null" : String(diskUsedBytes);
+
+  return sqlText
+    .replace(/null::numeric as disk_total_bytes/gi, `${totalReplacement}::numeric as disk_total_bytes`)
+    .replace(/null::numeric as disk_used_bytes/gi, `${usedReplacement}::numeric as disk_used_bytes`);
+}
+
+async function validateSqlDirectory() {
+  const files = await readdir(phase2Dir);
+  for (const fileName of SCRIPT_ORDER) {
+    if (!files.includes(fileName)) {
+      throw new Error(`Missing SQL template: ${fileName}`);
+    }
+  }
+}
+
+async function getScriptList() {
+  await validateSqlDirectory();
+
+  const include = process.env.PHASE2_INCLUDE_SCRIPTS;
+  if (!include) {
+    return SCRIPT_ORDER;
+  }
+
+  const selected = include
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const invalid = selected.filter((item) => !SCRIPT_ORDER.includes(item));
+  if (invalid.length > 0) {
+    throw new Error(`Unknown script(s): ${invalid.join(", ")}`);
+  }
+
+  return SCRIPT_ORDER.filter((item) => selected.includes(item));
+}
+
+async function hasMigrationRunLog(client) {
+  const result = await client.query(
+    "select to_regclass('public.migration_run_log')::text as table_name"
+  );
+  return Boolean(result.rows[0]?.table_name);
+}
+
+async function logRunStart(client, metadata) {
+  const available = await hasMigrationRunLog(client);
+  if (!available) {
+    return null;
+  }
+
+  const runKey = randomUUID();
+  await client.query(
+    `
+      insert into migration_run_log (
+        run_key,
+        batch_code,
+        script_name,
+        script_checksum,
+        run_status,
+        started_at
+      ) values ($1, $2, $3, $4, $5, now())
+    `,
+    [runKey, metadata.batchCode, metadata.scriptName, metadata.checksum, "STARTED"]
+  );
+  return runKey;
+}
+
+async function logRunFinish(client, runKey, status, errorMessage) {
+  if (!runKey) {
+    return;
+  }
+
+  await client.query(
+    `
+      update migration_run_log
+      set run_status = $2,
+          ended_at = now(),
+          error_message = $3
+      where run_key = $1
+    `,
+    [runKey, status, errorMessage]
+  );
+}
+
+function readSql(scriptName) {
+  const filePath = path.join(phase2Dir, scriptName);
+  const rawSql = readFileSync(filePath, "utf8");
+  const sql = scriptName === "000_precheck_readiness.sql" ? applyPrecheckInputs(rawSql) : rawSql;
+
+  return {
+    filePath,
+    scriptName,
+    sql,
+    checksum: sha256Hex(sql)
+  };
+}
+
+async function runReadinessChecks(client) {
+  const longTxnResult = await client.query(`
+    with long_txn as (
+      select pid
+      from pg_stat_activity
+      where xact_start is not null
+        and now() - xact_start > interval '15 minutes'
+    )
+    select count(*)::int as long_txn_count
+    from long_txn
+  `);
+
+  const blockingResult = await client.query(`
+    with blocking_pairs as (
+      select
+        blocked.pid as blocked_pid,
+        blocker.pid as blocker_pid
+      from pg_locks blocked
+      join pg_locks blocker
+        on blocked.locktype = blocker.locktype
+       and blocked.database is not distinct from blocker.database
+       and blocked.relation is not distinct from blocker.relation
+       and blocked.page is not distinct from blocker.page
+       and blocked.tuple is not distinct from blocker.tuple
+       and blocked.virtualxid is not distinct from blocker.virtualxid
+       and blocked.transactionid is not distinct from blocker.transactionid
+       and blocked.classid is not distinct from blocker.classid
+       and blocked.objid is not distinct from blocker.objid
+       and blocked.objsubid is not distinct from blocker.objsubid
+       and blocked.pid <> blocker.pid
+      where not blocked.granted
+        and blocker.granted
+    )
+    select count(*)::int as blocking_pair_count
+    from blocking_pairs
+  `);
+
+  const diskTotalBytes = toNumberOrNull(process.env.PRECHECK_DISK_TOTAL_BYTES);
+  const diskUsedBytes = toNumberOrNull(process.env.PRECHECK_DISK_USED_BYTES);
+  let storageStatus = "SKIPPED_INPUT_REQUIRED";
+  let freePercent = null;
+
+  if (diskTotalBytes !== null && diskUsedBytes !== null && diskTotalBytes > 0) {
+    const diskFreeBytes = Math.max(diskTotalBytes - diskUsedBytes, 0);
+    freePercent = Math.round((diskFreeBytes / diskTotalBytes) * 10000) / 100;
+    storageStatus = freePercent >= 30 ? "PASS" : "FAIL_FREE_LT_30_PERCENT";
+  }
+
+  const longTxnCount = longTxnResult.rows[0]?.long_txn_count ?? 0;
+  const blockingPairCount = blockingResult.rows[0]?.blocking_pair_count ?? 0;
+
+  if (longTxnCount > 0) {
+    throw new Error(`Precheck failed: long transaction count is ${longTxnCount}`);
+  }
+  if (blockingPairCount > 0) {
+    throw new Error(`Precheck failed: blocking lock count is ${blockingPairCount}`);
+  }
+  if (storageStatus !== "PASS") {
+    throw new Error(
+      `Precheck failed: storage status ${storageStatus}. Set PRECHECK_DISK_TOTAL_BYTES and PRECHECK_DISK_USED_BYTES with >=30% free space`
+    );
+  }
+
+  return {
+    longTxnCount,
+    blockingPairCount,
+    storageStatus,
+    freePercent
+  };
+}
+
+function printDryRunDetails(scripts) {
+  console.log("PHASE2_DRY_RUN=true");
+  console.log(`SQL_DIR=${phase2Dir}`);
+  for (const scriptName of scripts) {
+    const loaded = readSql(scriptName);
+    console.log(`${loaded.scriptName} checksum=${loaded.checksum}`);
+  }
+}
+
+async function run() {
+  const scripts = await getScriptList();
+  const dryRun = process.env.PHASE2_DRY_RUN === "true";
+
+  if (dryRun) {
+    printDryRunDetails(scripts);
+    return;
+  }
+
+  const connectionString = process.env.OPS_DB_URL;
+  if (!connectionString) {
+    throw new Error("Missing OPS_DB_URL environment variable");
+  }
+
+  const client = new Client({ connectionString });
+  await client.connect();
+
+  try {
+    const precheck = await runReadinessChecks(client);
+    console.log(
+      `Precheck PASS long_txn=${precheck.longTxnCount} blocking_locks=${precheck.blockingPairCount} free_percent=${precheck.freePercent}`
+    );
+
+    for (const scriptName of scripts) {
+      const loaded = readSql(scriptName);
+      const batchCode = loaded.scriptName.split("_")[0];
+      const runKey = await logRunStart(client, {
+        batchCode,
+        scriptName: loaded.scriptName,
+        checksum: loaded.checksum
+      });
+
+      try {
+        await client.query(loaded.sql);
+        await logRunFinish(client, runKey, "SUCCEEDED", null);
+        console.log(`PASS ${loaded.scriptName}`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "UNKNOWN_SQL_ERROR";
+        await logRunFinish(client, runKey, "FAILED", errorMessage);
+        throw new Error(`Script failed: ${loaded.scriptName} -> ${errorMessage}`);
+      }
+    }
+  } finally {
+    await client.end();
+  }
+}
+
+run().catch((error) => {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+});
