@@ -79,6 +79,10 @@ Replay flow:
    - `READY -> REPLAYING` when replay accepted
    - `REPLAYING -> SUCCEEDED` when processing succeeds
    - `REPLAYING -> FAILED` when replay exhausts retry or non-retryable error
+5. operational actions are audited to `GET /v1/audit/events`:
+   - replay requested/rejected
+   - fail-to-DLQ action
+   - dead-letter status changes
 
 Queue runtime:
 

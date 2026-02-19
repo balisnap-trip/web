@@ -1,12 +1,16 @@
-import { Controller, Get, Param, Patch, Query } from "@nestjs/common";
-import { ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { Controller, Get, Headers, Param, Patch, Query } from "@nestjs/common";
+import { ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { successEnvelope } from "../../common/http/envelope";
+import { AuditService } from "../audit/audit.service";
 import { IngestDeadLetterStatus, IngestService } from "./ingest.service";
 
 @ApiTags("ingest-dead-letter")
 @Controller("v1/ingest/dead-letter")
 export class IngestDeadLetterController {
-  constructor(private readonly ingestService: IngestService) {}
+  constructor(
+    private readonly ingestService: IngestService,
+    private readonly auditService: AuditService
+  ) {}
 
   @Get()
   @ApiOperation({ summary: "List dead-letter events" })
@@ -36,15 +40,31 @@ export class IngestDeadLetterController {
   @ApiOperation({ summary: "Update dead-letter status" })
   @ApiParam({ name: "deadLetterKey", example: "11ba6d8e-9bfd-4c9d-bcf3-537abcbf2d73" })
   @ApiParam({ name: "status", example: "READY" })
+  @ApiHeader({ name: "x-actor", description: "Actor identifier for audit trail", required: false })
   async updateStatus(
     @Param("deadLetterKey") deadLetterKey: string,
-    @Param("status") status: IngestDeadLetterStatus
+    @Param("status") status: IngestDeadLetterStatus,
+    @Headers() headers: Record<string, unknown>
   ) {
-    return successEnvelope(
-      await this.ingestService.updateDeadLetterStatus({
-        deadLetterKey,
-        toStatus: status
-      })
-    );
+    const updated = await this.ingestService.updateDeadLetterStatus({
+      deadLetterKey,
+      toStatus: status
+    });
+
+    const actorHeader = headers["x-actor"] ?? headers["x-admin-user"] ?? headers["x-user-id"];
+    const actor = typeof actorHeader === "string" && actorHeader.trim() ? actorHeader.trim() : "system";
+
+    this.auditService.record({
+      eventType: "INGEST_DEAD_LETTER_STATUS_UPDATED",
+      actor,
+      resourceType: "INGEST_DEAD_LETTER",
+      resourceId: deadLetterKey,
+      metadata: {
+        status: updated.status,
+        eventId: updated.eventId
+      }
+    });
+
+    return successEnvelope(updated);
   }
 }

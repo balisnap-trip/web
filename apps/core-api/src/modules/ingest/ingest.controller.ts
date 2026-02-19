@@ -12,6 +12,7 @@ import {
 import { RawBodyRequest } from "@nestjs/common";
 import { ApiHeader, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
 import { successEnvelope } from "../../common/http/envelope";
+import { AuditService } from "../audit/audit.service";
 import { IngestFeatureFlagsService } from "./ingest-feature-flags.service";
 import { IngestQueueService } from "./ingest-queue.service";
 import { IngestSecurityService } from "./ingest-security.service";
@@ -31,7 +32,8 @@ export class IngestController {
     private readonly ingestService: IngestService,
     private readonly ingestSecurityService: IngestSecurityService,
     private readonly ingestQueueService: IngestQueueService,
-    private readonly featureFlags: IngestFeatureFlagsService
+    private readonly featureFlags: IngestFeatureFlagsService,
+    private readonly auditService: AuditService
   ) {}
 
   @Post()
@@ -102,27 +104,55 @@ export class IngestController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: "Replay failed ingest event" })
   @ApiParam({ name: "eventId", example: "a8f0f4ee-52f2-4e20-a2d9-e7f2f806663e" })
-  async replay(@Param("eventId") eventId: string) {
+  @ApiHeader({ name: "x-actor", description: "Actor identifier for audit trail", required: false })
+  async replay(@Param("eventId") eventId: string, @Headers() headers: Record<string, unknown>) {
     this.featureFlags.assertReplayEnabled();
+    const actor = this.resolveActor(headers);
 
-    const replayed = await this.ingestService.replayEvent(eventId);
-    const queued = await this.ingestQueueService.enqueueEvent(replayed.eventId, {
-      reason: "REPLAY",
-      attemptNumber: 1
-    });
+    try {
+      const replayed = await this.ingestService.replayEvent(eventId);
+      const queued = await this.ingestQueueService.enqueueEvent(replayed.eventId, {
+        reason: "REPLAY",
+        attemptNumber: 1
+      });
 
-    return successEnvelope({
-      ...replayed,
-      queued
-    });
+      this.auditService.record({
+        eventType: "INGEST_REPLAY_REQUESTED",
+        actor,
+        resourceType: "INGEST_EVENT",
+        resourceId: replayed.eventId,
+        metadata: {
+          queued
+        }
+      });
+
+      return successEnvelope({
+        ...replayed,
+        queued
+      });
+    } catch (error) {
+      this.auditService.record({
+        eventType: "INGEST_REPLAY_REJECTED",
+        actor,
+        resourceType: "INGEST_EVENT",
+        resourceId: eventId,
+        metadata: {
+          error: this.readErrorMessage(error)
+        }
+      });
+
+      throw error;
+    }
   }
 
   @Post(":eventId/fail")
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: "Mark event as failed and move to dead-letter queue" })
   @ApiParam({ name: "eventId", example: "a8f0f4ee-52f2-4e20-a2d9-e7f2f806663e" })
+  @ApiHeader({ name: "x-actor", description: "Actor identifier for audit trail", required: false })
   async fail(
     @Param("eventId") eventId: string,
+    @Headers() headers: Record<string, unknown>,
     @Body()
     body: {
       reasonCode: string;
@@ -130,13 +160,40 @@ export class IngestController {
       poisonMessage?: boolean;
     }
   ) {
-    return successEnvelope(
-      await this.ingestService.markEventFailed({
-        eventId,
+    const deadLetter = await this.ingestService.markEventFailed({
+      eventId,
+      reasonCode: body.reasonCode,
+      reasonDetail: body.reasonDetail,
+      poisonMessage: body.poisonMessage
+    });
+
+    this.auditService.record({
+      eventType: "INGEST_EVENT_MARKED_FAILED",
+      actor: this.resolveActor(headers),
+      resourceType: "INGEST_EVENT",
+      resourceId: eventId,
+      metadata: {
+        deadLetterKey: deadLetter.deadLetterKey,
         reasonCode: body.reasonCode,
-        reasonDetail: body.reasonDetail,
-        poisonMessage: body.poisonMessage
-      })
-    );
+        poisonMessage: body.poisonMessage ?? false
+      }
+    });
+
+    return successEnvelope(deadLetter);
+  }
+
+  private resolveActor(headers: Record<string, unknown>): string {
+    const actorHeader = headers["x-actor"] ?? headers["x-admin-user"] ?? headers["x-user-id"];
+    if (typeof actorHeader === "string" && actorHeader.trim()) {
+      return actorHeader.trim();
+    }
+    return "system";
+  }
+
+  private readErrorMessage(error: unknown): string {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return "UNKNOWN_REPLAY_ERROR";
   }
 }

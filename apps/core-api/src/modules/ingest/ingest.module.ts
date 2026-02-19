@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AuditModule } from "../audit/audit.module";
 import { DatabaseModule } from "../database/database.module";
 import { IngestDeadLetterController } from "./ingest-dead-letter.controller";
 import { IngestFeatureFlagsService } from "./ingest-feature-flags.service";
@@ -9,7 +10,7 @@ import { IngestSecurityService } from "./ingest-security.service";
 import { IngestService } from "./ingest.service";
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [DatabaseModule, AuditModule],
   controllers: [IngestController, IngestDeadLetterController],
   providers: [
     IngestService,
