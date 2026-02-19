@@ -59,6 +59,11 @@ Reports are written to:
 - `reports/recon/quality/{PHASE2_BATCH_CODE}/{timestamp}.json`
 - `reports/recon/quality/{PHASE2_BATCH_CODE}/{timestamp}.md`
 
+CI execution:
+
+- GitHub Actions manual workflow: `.github/workflows/phase2-quality-check.yml`
+- workflow membutuhkan secret repository `OPS_DB_URL`
+
 ## Ingestion Security
 
 `POST /v1/ingest/bookings/events` now validates:

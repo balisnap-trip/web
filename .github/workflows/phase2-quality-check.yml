@@ -1,0 +1,66 @@
+name: Phase-2 Quality Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase2_batch_code:
+        description: "Batch code untuk penamaan report (A-H)"
+        required: true
+        default: "A"
+        type: string
+      quality_max_ops_done_not_paid_ratio:
+        description: "Maximum ops DONE vs payment mismatch ratio"
+        required: true
+        default: "0.01"
+        type: string
+      quality_max_unmapped_ratio_percent:
+        description: "Maximum unmapped ratio percent"
+        required: true
+        default: "5"
+        type: string
+
+jobs:
+  phase2-quality-check:
+    name: Run Phase-2 Quality Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPS_DB_URL: ${{ secrets.OPS_DB_URL }}
+      PHASE2_BATCH_CODE: ${{ inputs.phase2_batch_code }}
+      QUALITY_MAX_OPS_DONE_NOT_PAID_RATIO: ${{ inputs.quality_max_ops_done_not_paid_ratio }}
+      QUALITY_MAX_UNMAPPED_RATIO_PERCENT: ${{ inputs.quality_max_unmapped_ratio_percent }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate OPS_DB_URL secret
+        run: |
+          if [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run quality checks
+        run: pnpm --filter @bst/core-api quality:phase2
+
+      - name: Upload quality reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase2-quality-reports
+          if-no-files-found: warn
+          path: reports/recon/quality/**
