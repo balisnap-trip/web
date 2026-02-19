@@ -39,6 +39,26 @@ Reports are written to:
 - `reports/recon/{PHASE2_BATCH_CODE}/{timestamp}.json`
 - `reports/recon/{PHASE2_BATCH_CODE}/{timestamp}.md`
 
+## Phase-2 Quality Check
+
+Run data-quality checks aligned with migration matrix thresholds:
+
+```bash
+set OPS_DB_URL=postgresql://postgres:postgres@localhost:5432/ops_db
+set PHASE2_BATCH_CODE=A
+pnpm --filter @bst/core-api quality:phase2
+```
+
+Optional thresholds:
+
+- `QUALITY_MAX_OPS_DONE_NOT_PAID_RATIO` (default `0.01`)
+- `QUALITY_MAX_UNMAPPED_RATIO_PERCENT` (default `5`)
+
+Reports are written to:
+
+- `reports/recon/quality/{PHASE2_BATCH_CODE}/{timestamp}.json`
+- `reports/recon/quality/{PHASE2_BATCH_CODE}/{timestamp}.md`
+
 ## Ingestion Security
 
 `POST /v1/ingest/bookings/events` now validates:

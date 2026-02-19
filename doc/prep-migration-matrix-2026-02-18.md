@@ -316,3 +316,12 @@ GROUP BY 1;
 3. Null critical fields: `0`.
 4. Unmapped ratio per channel: `<= 5%` pada akhir batch catalog.
 5. Ops status drift vs settlement: `<= 1%` dan wajib ada daftar exception.
+
+## 15. Automation Hook
+
+Untuk eksekusi checks di atas secara otomatis dari `apps/core-api`:
+
+1. `pnpm --filter @bst/core-api quality:phase2`
+2. output report:
+   1. `reports/recon/quality/{PHASE2_BATCH_CODE}/{timestamp}.json`
+   2. `reports/recon/quality/{PHASE2_BATCH_CODE}/{timestamp}.md`
