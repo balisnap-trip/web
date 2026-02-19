@@ -273,9 +273,11 @@ Status: aktif
 | Otomasi gate `F-00` runtime env baseline | `DONE` | `pnpm gate:ingest-env-baseline` + report `reports/gates/ingest-env-baseline/*` |
 | Smoke test ingest handshake setelah reload process | `DONE` | `SMOKE_TEST_RESULT=PASS` + `ADMIN_AUTH_SMOKE_RESULT=PASS` pada runtime `/home/bonk/backend/core-api-prod/current` |
 | Gate Batch F (`F-01/F-02/F-03`) ingest release | `DONE` | `/home/bonk/backend/core-api-prod/releases/20260219T192910Z/reports/gates/ingest-release/2026-02-19T19-52-42-450Z.json` |
+| Release evidence Batch F (ingest gate scope) | `DONE` | `/home/bonk/backend/core-api-prod/releases/20260219T192910Z/reports/release-evidence/F/2026-02-19T20-07-33-501Z.json` |
+| Quality check phase2 (batch A) | `BLOCKED` | `FAILED_CHECK=unmapped_ratio_percent` karena denominator katalog `0` (`reports/recon/quality/A/2026-02-19T20-02-18-668Z.json`) |
 
 ## 12. Immediate Next Action
 
-1. Jalankan `pnpm --filter @bst/core-api quality:phase2` pada runtime release aktif untuk melengkapi evidence batch.
-2. Jalankan `pnpm --filter @bst/core-api release:evidence` setelah quality check `PASS`.
-3. Kumpulkan evidence JSON/MD dan lanjutkan sign-off matrix (Tech Lead, Backend Lead, DevOps, Owner).
+1. Siapkan data denominator katalog (`catalog_product`/`catalog_variant`) sebelum menjalankan ulang `quality:phase2`.
+2. Jalankan ulang `pnpm --filter @bst/core-api quality:phase2` setelah denominator > 0.
+3. Setelah quality `PASS`, jalankan `pnpm --filter @bst/core-api release:evidence` full scope (`RUN_EVIDENCE_QUALITY_CHECK=true`).

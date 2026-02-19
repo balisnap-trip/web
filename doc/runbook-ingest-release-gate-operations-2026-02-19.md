@@ -48,6 +48,8 @@ Environment penting:
    1. `pnpm --filter @bst/core-api gate:ingest-release`
 5. Combined release evidence:
    1. `pnpm --filter @bst/core-api release:evidence`
+   2. jika quality check belum in-scope batch aktif, gunakan:
+      1. `RUN_EVIDENCE_QUALITY_CHECK=false pnpm --filter @bst/core-api release:evidence`
 
 ## 3.1 Preflight Wajib Sebelum Gate
 
