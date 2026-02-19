@@ -102,6 +102,24 @@ Scope: gate eksekusi batch A-H sebelum lanjut batch berikutnya.
 | Ops Lead | Ya (Batch G/H) | validasi dampak operasional |
 | Owner | Ya (Go/No-Go) | final approval lanjut batch |
 
+## 4.1 Gate Automation Commands (Batch F)
+
+`apps/core-api` menyediakan command otomatis untuk gate ingestion:
+
+1. `F-01/F-02`:
+   1. `pnpm --filter @bst/core-api gate:ingest-processing`
+2. `F-03`:
+   1. `pnpm --filter @bst/core-api gate:ingest-dlq-growth`
+3. Combined evidence run:
+   1. `pnpm --filter @bst/core-api gate:ingest-release`
+
+Output evidence:
+
+1. `reports/gates/ingest-processing/{timestamp}.json`
+2. `reports/gates/ingest-dlq-growth/{timestamp}.json`
+3. `reports/gates/ingest-release/{timestamp}.json`
+4. `reports/gates/ingest-release/{timestamp}.md`
+
 ## 5. Gate Result Template
 
 ```md
