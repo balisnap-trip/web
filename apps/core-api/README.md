@@ -216,6 +216,11 @@ Combined report JSON akan ditulis ke:
 - `reports/gates/ingest-release/{timestamp}.json`
 - `reports/gates/ingest-release/{timestamp}.md`
 
+CI execution:
+
+- GitHub Actions manual workflow tersedia di `.github/workflows/ingest-release-gate.yml`
+- workflow akan upload artifact report dari folder `reports/gates/*`
+
 ## Error Envelope
 
 HTTP errors are wrapped with:

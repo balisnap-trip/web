@@ -1,0 +1,120 @@
+name: Ingest Release Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_api_base_url:
+        description: "Base URL core-api target (contoh https://core-api-staging.example.com)"
+        required: true
+        type: string
+      run_gate_processing:
+        description: "Run F-01/F-02 processing gate"
+        required: true
+        default: true
+        type: boolean
+      run_gate_dlq_growth:
+        description: "Run F-03 DLQ growth gate"
+        required: true
+        default: true
+        type: boolean
+      gate_processing_window_minutes:
+        description: "Processing window minutes"
+        required: true
+        default: "60"
+        type: string
+      gate_processing_min_success_rate:
+        description: "Minimum success rate (F-01)"
+        required: true
+        default: "0.995"
+        type: string
+      gate_processing_max_median_ms:
+        description: "Maximum median latency ms (F-02)"
+        required: true
+        default: "3000"
+        type: string
+      gate_processing_max_p95_ms:
+        description: "Maximum p95 latency ms (F-02)"
+        required: true
+        default: "15000"
+        type: string
+      gate_dlq_window_minutes:
+        description: "DLQ growth observation window minutes (F-03)"
+        required: true
+        default: "120"
+        type: string
+      gate_dlq_sample_interval_seconds:
+        description: "DLQ sampling interval seconds"
+        required: true
+        default: "60"
+        type: string
+      gate_dlq_max_growth_per_hour:
+        description: "Max DLQ growth per hour (F-03)"
+        required: true
+        default: "20"
+        type: string
+      gate_dlq_max_fetch_errors:
+        description: "Max fetch errors for DLQ gate"
+        required: true
+        default: "0"
+        type: string
+      gate_dlq_include_statuses:
+        description: "DLQ statuses counted in growth metric"
+        required: true
+        default: "OPEN,READY,REPLAYING,FAILED"
+        type: string
+
+jobs:
+  ingest-release-gate:
+    name: Run Ingest Release Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 190
+    env:
+      CORE_API_BASE_URL: ${{ inputs.core_api_base_url }}
+      RUN_GATE_PROCESSING: ${{ inputs.run_gate_processing }}
+      RUN_GATE_DLQ_GROWTH: ${{ inputs.run_gate_dlq_growth }}
+      GATE_PROCESSING_WINDOW_MINUTES: ${{ inputs.gate_processing_window_minutes }}
+      GATE_PROCESSING_MIN_SUCCESS_RATE: ${{ inputs.gate_processing_min_success_rate }}
+      GATE_PROCESSING_MAX_MEDIAN_MS: ${{ inputs.gate_processing_max_median_ms }}
+      GATE_PROCESSING_MAX_P95_MS: ${{ inputs.gate_processing_max_p95_ms }}
+      GATE_DLQ_WINDOW_MINUTES: ${{ inputs.gate_dlq_window_minutes }}
+      GATE_DLQ_SAMPLE_INTERVAL_SECONDS: ${{ inputs.gate_dlq_sample_interval_seconds }}
+      GATE_DLQ_MAX_GROWTH_PER_HOUR: ${{ inputs.gate_dlq_max_growth_per_hour }}
+      GATE_DLQ_MAX_FETCH_ERRORS: ${{ inputs.gate_dlq_max_fetch_errors }}
+      GATE_DLQ_INCLUDE_STATUSES: ${{ inputs.gate_dlq_include_statuses }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ingest release gate
+        id: run_gates
+        run: pnpm --filter @bst/core-api gate:ingest-release
+        continue-on-error: true
+
+      - name: Upload gate reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingest-release-gate-reports
+          if-no-files-found: warn
+          path: |
+            reports/gates/ingest-processing/**
+            reports/gates/ingest-dlq-growth/**
+            reports/gates/ingest-release/**
+
+      - name: Mark workflow failed when gate check fails
+        if: steps.run_gates.outcome != 'success'
+        run: exit 1
