@@ -9,6 +9,19 @@ interface IngestJobPayload {
   reason: "INGEST_RECEIVED" | "REPLAY" | "RETRY";
 }
 
+export interface IngestQueueRuntimeMetrics {
+  queueName: string;
+  enabled: boolean;
+  connected: boolean;
+  waiting: number;
+  active: number;
+  delayed: number;
+  completed: number;
+  failed: number;
+  paused: number;
+  lastError: string | null;
+}
+
 @Injectable()
 export class IngestQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(IngestQueueService.name);
@@ -103,6 +116,54 @@ export class IngestQueueService implements OnModuleInit, OnModuleDestroy {
     });
 
     return true;
+  }
+
+  async getRuntimeMetrics(): Promise<IngestQueueRuntimeMetrics> {
+    const base: IngestQueueRuntimeMetrics = {
+      queueName: this.queueName,
+      enabled: this.featureFlags.isQueueEnabled(),
+      connected: false,
+      waiting: 0,
+      active: 0,
+      delayed: 0,
+      completed: 0,
+      failed: 0,
+      paused: 0,
+      lastError: null
+    };
+
+    if (!base.enabled || !this.queue) {
+      return base;
+    }
+
+    try {
+      const counts = await this.queue.getJobCounts(
+        "waiting",
+        "active",
+        "delayed",
+        "completed",
+        "failed",
+        "paused"
+      );
+
+      return {
+        ...base,
+        connected: true,
+        waiting: counts.waiting ?? 0,
+        active: counts.active ?? 0,
+        delayed: counts.delayed ?? 0,
+        completed: counts.completed ?? 0,
+        failed: counts.failed ?? 0,
+        paused: counts.paused ?? 0
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "QUEUE_METRICS_ERROR";
+      this.logger.warn(`Queue metrics unavailable: ${message}`);
+      return {
+        ...base,
+        lastError: message
+      };
+    }
   }
 
   private async handleJob(job: Job<IngestJobPayload>) {

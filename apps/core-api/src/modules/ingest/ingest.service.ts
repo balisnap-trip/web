@@ -54,6 +54,11 @@ export interface IngestDeadLetterRecord {
   eventType: string;
 }
 
+export interface IngestDeadLetterMetrics {
+  total: number;
+  byStatus: Record<IngestDeadLetterStatus, number>;
+}
+
 export interface IngestProcessingFailure {
   retryable: boolean;
   reasonCode: string;
@@ -693,6 +698,37 @@ export class IngestService {
       throw new NotFoundException(`Dead letter not found: ${deadLetterKey}`);
     }
     return this.mapDeadLetterRow(result.rows[0]);
+  }
+
+  async getDeadLetterMetrics(): Promise<IngestDeadLetterMetrics> {
+    const byStatus: Record<IngestDeadLetterStatus, number> = {
+      OPEN: 0,
+      READY: 0,
+      REPLAYING: 0,
+      SUCCEEDED: 0,
+      FAILED: 0,
+      RESOLVED: 0,
+      CLOSED: 0
+    };
+
+    const result = await this.databaseService.opsQuery<{ status: string; count: number | string }>(
+      `
+        select status, count(*)::int as count
+        from ingest_dead_letter
+        group by status
+      `
+    );
+
+    for (const row of result.rows) {
+      const status = this.mapDeadLetterStatus(row.status);
+      byStatus[status] = Number(row.count ?? 0);
+    }
+
+    const total = Object.values(byStatus).reduce((acc, value) => acc + value, 0);
+    return {
+      total,
+      byStatus
+    };
   }
 
   async updateDeadLetterStatus(input: {
