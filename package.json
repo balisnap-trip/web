@@ -10,7 +10,11 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "core-api:dev": "pnpm --filter @bst/core-api dev",
-    "core-api:build": "pnpm --filter @bst/core-api build"
+    "core-api:build": "pnpm --filter @bst/core-api build",
+    "deploy:masterbst": "node ./scripts/masterbst/deploy.mjs",
+    "deploy:masterbst:build": "node ./scripts/masterbst/deploy.mjs --run-install --run-build",
+    "deploy:masterbst:list": "node ./scripts/masterbst/list.mjs",
+    "deploy:masterbst:rollback": "node ./scripts/masterbst/rollback.mjs"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
