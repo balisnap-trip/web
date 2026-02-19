@@ -128,6 +128,8 @@ Workflow automation:
 
 1. GitHub manual workflow:
    1. `.github/workflows/phase2-release-evidence.yml`
+2. Runbook operasional:
+   1. `doc/runbook-ingest-release-gate-operations-2026-02-19.md`
 
 ## 5. Gate Result Template
 
