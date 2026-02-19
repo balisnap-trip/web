@@ -159,6 +159,20 @@ The smoke script will:
 6. validate ingest metrics endpoints (`queue` + `processing`)
 7. validate audit trail event for fail/status-update/replay flow
 
+## Admin Auth Smoke Test
+
+Run RBAC smoke test for protected admin endpoints:
+
+```bash
+set CORE_API_BASE_URL=http://localhost:4000
+set CORE_API_ADMIN_TOKEN=dev-admin-token
+pnpm --filter @bst/core-api smoke:admin-auth
+```
+
+Optional:
+
+- `EXPECT_ADMIN_AUTH_ENFORCED` (default `true`)
+
 ## Ingest Burst Load Test
 
 Run burst load test against a running server:
