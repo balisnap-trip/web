@@ -3,6 +3,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const baseUrl = process.env.CORE_API_BASE_URL || "http://localhost:4000";
+const adminToken = process.env.CORE_API_ADMIN_TOKEN || "dev-admin-token";
+const adminRole = (process.env.CORE_API_ADMIN_ROLE || "ADMIN").toUpperCase();
 const windowMinutes = readNumberWithFallback(
   ["GATE_PROCESSING_WINDOW_MINUTES", "GATE_WINDOW_MINUTES"],
   60,
@@ -74,6 +76,10 @@ async function fetchMetrics() {
   const startedAt = Date.now();
   const response = await fetch(`${baseUrl}${endpointPath}`, {
     method: "GET",
+    headers: {
+      authorization: `Bearer ${adminToken}`,
+      "x-admin-role": adminRole
+    },
     signal: AbortSignal.timeout(requestTimeoutMs)
   });
   const responseText = await response.text();

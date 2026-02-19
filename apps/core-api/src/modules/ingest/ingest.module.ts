@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { AdminAuthGuard } from "../../common/auth/admin-auth.guard";
 import { AuditModule } from "../audit/audit.module";
 import { DatabaseModule } from "../database/database.module";
 import { IngestDeadLetterController } from "./ingest-dead-letter.controller";
@@ -18,7 +19,8 @@ import { IngestService } from "./ingest.service";
     IngestSecurityService,
     IngestFeatureFlagsService,
     IngestQueueService,
-    IngestRetentionService
+    IngestRetentionService,
+    AdminAuthGuard
   ]
 })
 export class IngestModule {}

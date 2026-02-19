@@ -1,10 +1,16 @@
-import { Controller, Get, Headers, Param, Patch, Query } from "@nestjs/common";
-import { ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { Controller, Get, Headers, Param, Patch, Query, UseGuards } from "@nestjs/common";
+import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { RequireAdminRoles } from "../../common/auth/admin-auth.decorator";
+import { AdminAuthGuard } from "../../common/auth/admin-auth.guard";
 import { successEnvelope } from "../../common/http/envelope";
 import { AuditService } from "../audit/audit.service";
 import { IngestDeadLetterStatus, IngestService } from "./ingest.service";
 
 @ApiTags("ingest-dead-letter")
+@ApiBearerAuth()
+@ApiHeader({ name: "x-admin-role", description: "Admin role (ADMIN/STAFF/MANAGER)", required: true })
+@UseGuards(AdminAuthGuard)
+@RequireAdminRoles("ADMIN", "STAFF", "MANAGER")
 @Controller("v1/ingest/dead-letter")
 export class IngestDeadLetterController {
   constructor(
@@ -41,6 +47,7 @@ export class IngestDeadLetterController {
   @ApiParam({ name: "deadLetterKey", example: "11ba6d8e-9bfd-4c9d-bcf3-537abcbf2d73" })
   @ApiParam({ name: "status", example: "READY" })
   @ApiHeader({ name: "x-actor", description: "Actor identifier for audit trail", required: false })
+  @RequireAdminRoles("ADMIN", "MANAGER")
   async updateStatus(
     @Param("deadLetterKey") deadLetterKey: string,
     @Param("status") status: IngestDeadLetterStatus,

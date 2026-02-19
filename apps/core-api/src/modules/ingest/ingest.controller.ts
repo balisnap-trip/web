@@ -7,10 +7,13 @@ import {
   HttpStatus,
   Param,
   Post,
-  Req
+  Req,
+  UseGuards
 } from "@nestjs/common";
 import { RawBodyRequest } from "@nestjs/common";
-import { ApiHeader, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiHeader, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
+import { RequireAdminRoles } from "../../common/auth/admin-auth.decorator";
+import { AdminAuthGuard } from "../../common/auth/admin-auth.guard";
 import { successEnvelope } from "../../common/http/envelope";
 import { AuditService } from "../audit/audit.service";
 import { IngestFeatureFlagsService } from "./ingest-feature-flags.service";
@@ -104,7 +107,11 @@ export class IngestController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: "Replay failed ingest event" })
   @ApiParam({ name: "eventId", example: "a8f0f4ee-52f2-4e20-a2d9-e7f2f806663e" })
+  @ApiBearerAuth()
+  @ApiHeader({ name: "x-admin-role", description: "Admin role (ADMIN/STAFF/MANAGER)", required: true })
   @ApiHeader({ name: "x-actor", description: "Actor identifier for audit trail", required: false })
+  @UseGuards(AdminAuthGuard)
+  @RequireAdminRoles("ADMIN", "MANAGER")
   async replay(@Param("eventId") eventId: string, @Headers() headers: Record<string, unknown>) {
     this.featureFlags.assertReplayEnabled();
     const actor = this.resolveActor(headers);
@@ -149,7 +156,11 @@ export class IngestController {
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: "Mark event as failed and move to dead-letter queue" })
   @ApiParam({ name: "eventId", example: "a8f0f4ee-52f2-4e20-a2d9-e7f2f806663e" })
+  @ApiBearerAuth()
+  @ApiHeader({ name: "x-admin-role", description: "Admin role (ADMIN/STAFF/MANAGER)", required: true })
   @ApiHeader({ name: "x-actor", description: "Actor identifier for audit trail", required: false })
+  @UseGuards(AdminAuthGuard)
+  @RequireAdminRoles("ADMIN", "MANAGER")
   async fail(
     @Param("eventId") eventId: string,
     @Headers() headers: Record<string, unknown>,

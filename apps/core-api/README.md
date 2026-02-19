@@ -81,6 +81,14 @@ Feature flag gates:
 - `INGEST_QUEUE_ENABLED` controls BullMQ worker + enqueue behavior
 - `INGEST_REPLAY_ENABLED` controls replay endpoint
 
+Admin auth for protected ops endpoints (`/v1/audit/*`, `/v1/ingest/dead-letter/*`, `/v1/ingest/metrics/*`, replay/fail):
+
+- `authorization: Bearer <admin-token>`
+- `x-admin-role: ADMIN | STAFF | MANAGER`
+- env:
+  - `ADMIN_AUTH_ENABLED` (default `true`)
+  - `CORE_API_ADMIN_TOKEN` (default `dev-admin-token` for local)
+
 Ingest storage behavior:
 
 - accepted events are persisted to `ingest_event_log` in `ops_db`
@@ -180,6 +188,7 @@ Run automated gate check for `DLQ growth <= 20 event/jam` using live metrics end
 
 ```bash
 set CORE_API_BASE_URL=http://localhost:4000
+set CORE_API_ADMIN_TOKEN=dev-admin-token
 set GATE_DLQ_WINDOW_MINUTES=120
 set GATE_DLQ_SAMPLE_INTERVAL_SECONDS=60
 set GATE_DLQ_MAX_GROWTH_PER_HOUR=20
@@ -206,6 +215,7 @@ Run automated gate check for:
 
 ```bash
 set CORE_API_BASE_URL=http://localhost:4000
+set CORE_API_ADMIN_TOKEN=dev-admin-token
 set GATE_PROCESSING_WINDOW_MINUTES=60
 set GATE_PROCESSING_MIN_SUCCESS_RATE=0.995
 set GATE_PROCESSING_MAX_MEDIAN_MS=3000
@@ -228,6 +238,7 @@ Run combined gate execution for ingestion release evidence:
 
 ```bash
 set CORE_API_BASE_URL=http://localhost:4000
+set CORE_API_ADMIN_TOKEN=dev-admin-token
 pnpm --filter @bst/core-api gate:ingest-release
 ```
 
@@ -245,6 +256,7 @@ CI execution:
 
 - GitHub Actions manual workflow tersedia di `.github/workflows/ingest-release-gate.yml`
 - workflow akan upload artifact report dari folder `reports/gates/*`
+- workflow membutuhkan secret repository `CORE_API_ADMIN_TOKEN`
 
 ## Error Envelope
 

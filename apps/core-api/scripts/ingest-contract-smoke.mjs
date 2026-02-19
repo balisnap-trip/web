@@ -3,6 +3,8 @@ import { createHash, createHmac, randomUUID } from "crypto";
 const baseUrl = process.env.CORE_API_BASE_URL || "http://localhost:4000";
 const serviceToken = process.env.INGEST_SERVICE_TOKEN || "dev-service-token";
 const serviceSecret = process.env.INGEST_SERVICE_SECRET || "dev-service-secret";
+const adminToken = process.env.CORE_API_ADMIN_TOKEN || "dev-admin-token";
+const adminRole = (process.env.CORE_API_ADMIN_ROLE || "ADMIN").toUpperCase();
 const actor = process.env.INGEST_SMOKE_ACTOR || "smoke-runner";
 
 function sha256Hex(input) {
@@ -54,6 +56,10 @@ function assertAuditContains(events, eventType) {
 }
 
 async function run() {
+  const adminHeaders = {
+    authorization: `Bearer ${adminToken}`,
+    "x-admin-role": adminRole
+  };
   const path = "/v1/ingest/bookings/events";
   const payload = {
     payloadVersion: "v1",
@@ -123,6 +129,7 @@ async function run() {
   const failResponse = await requestJson(`/v1/ingest/bookings/events/${eventId}/fail`, {
     method: "POST",
     headers: {
+      ...adminHeaders,
       "content-type": "application/json",
       "x-actor": actor
     },
@@ -144,6 +151,7 @@ async function run() {
     {
       method: "PATCH",
       headers: {
+        ...adminHeaders,
         "x-actor": actor
       }
     }
@@ -153,21 +161,31 @@ async function run() {
   const replayResponse = await requestJson(`/v1/ingest/bookings/events/${eventId}/replay`, {
     method: "POST",
     headers: {
+      ...adminHeaders,
       "x-actor": actor
     }
   });
   assertStatus(replayResponse.status, 202, "Replay endpoint failed");
 
-  const deadLetterList = await requestJson("/v1/ingest/dead-letter?status=READY&limit=20");
+  const deadLetterList = await requestJson("/v1/ingest/dead-letter?status=READY&limit=20", {
+    headers: adminHeaders
+  });
   assertStatus(deadLetterList.status, 200, "Dead-letter list endpoint failed");
 
-  const metricsResponse = await requestJson("/v1/ingest/metrics/queue");
+  const metricsResponse = await requestJson("/v1/ingest/metrics/queue", {
+    headers: adminHeaders
+  });
   assertStatus(metricsResponse.status, 200, "Ingest metrics endpoint failed");
   if (!metricsResponse.json?.data?.queue || !metricsResponse.json?.data?.deadLetter) {
     throw new Error("Invalid ingest metrics payload");
   }
 
-  const processingMetricsResponse = await requestJson("/v1/ingest/metrics/processing?windowMinutes=60");
+  const processingMetricsResponse = await requestJson(
+    "/v1/ingest/metrics/processing?windowMinutes=60",
+    {
+      headers: adminHeaders
+    }
+  );
   assertStatus(processingMetricsResponse.status, 200, "Ingest processing metrics endpoint failed");
   if (
     !processingMetricsResponse.json?.data?.totals ||
@@ -176,7 +194,9 @@ async function run() {
     throw new Error("Invalid ingest processing metrics payload");
   }
 
-  const auditResponse = await requestJson("/v1/audit/events?limit=100");
+  const auditResponse = await requestJson("/v1/audit/events?limit=100", {
+    headers: adminHeaders
+  });
   assertStatus(auditResponse.status, 200, "Audit endpoint failed");
   const auditEvents = Array.isArray(auditResponse.json?.data)
     ? auditResponse.json.data.filter((event) => event?.actor === actor)

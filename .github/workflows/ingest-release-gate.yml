@@ -70,6 +70,8 @@ jobs:
     timeout-minutes: 190
     env:
       CORE_API_BASE_URL: ${{ inputs.core_api_base_url }}
+      CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CORE_API_ADMIN_ROLE: ADMIN
       RUN_GATE_PROCESSING: ${{ inputs.run_gate_processing }}
       RUN_GATE_DLQ_GROWTH: ${{ inputs.run_gate_dlq_growth }}
       GATE_PROCESSING_WINDOW_MINUTES: ${{ inputs.gate_processing_window_minutes }}
@@ -98,6 +100,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate CORE_API_ADMIN_TOKEN secret
+        run: |
+          if [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret"
+            exit 1
+          fi
 
       - name: Run ingest release gate
         id: run_gates
