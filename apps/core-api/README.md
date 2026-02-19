@@ -70,6 +70,7 @@ Dead-letter operations:
 - `PATCH /v1/ingest/dead-letter/{deadLetterKey}/status/{status}`
 - `POST /v1/ingest/bookings/events/{eventId}/fail` (move event to DLQ)
 - `GET /v1/ingest/metrics/queue` (queue depth + DLQ status metrics)
+- `GET /v1/ingest/metrics/processing?windowMinutes=60` (rolling success rate + latency)
 
 Replay flow:
 

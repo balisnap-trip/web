@@ -59,6 +59,26 @@ export interface IngestDeadLetterMetrics {
   byStatus: Record<IngestDeadLetterStatus, number>;
 }
 
+export interface IngestProcessingMetrics {
+  windowMinutes: number;
+  totals: {
+    received: number;
+    done: number;
+    failed: number;
+    processing: number;
+    pending: number;
+    terminal: number;
+  };
+  successRate: number;
+  failureRate: number;
+  latenciesMs: {
+    sampleCount: number;
+    median: number;
+    p95: number;
+    max: number;
+  };
+}
+
 export interface IngestProcessingFailure {
   retryable: boolean;
   reasonCode: string;
@@ -731,6 +751,102 @@ export class IngestService {
     };
   }
 
+  async getProcessingMetrics(windowMinutes = 60): Promise<IngestProcessingMetrics> {
+    const normalizedWindowMinutes = this.normalizeWindowMinutes(windowMinutes);
+
+    const totalsResult = await this.databaseService.opsQuery<{
+      received: number | string;
+      done: number | string;
+      failed: number | string;
+      processing: number | string;
+      pending: number | string;
+      terminal: number | string;
+    }>(
+      `
+        select
+          count(*)::int as received,
+          count(*) filter (where process_status = 'DONE')::int as done,
+          count(*) filter (where process_status = 'FAILED')::int as failed,
+          count(*) filter (where process_status = 'PROCESSING')::int as processing,
+          count(*) filter (where process_status = 'RECEIVED')::int as pending,
+          count(*) filter (where process_status in ('DONE', 'FAILED'))::int as terminal
+        from ingest_event_log
+        where request_received_at >= now() - make_interval(mins => $1)
+      `,
+      [normalizedWindowMinutes]
+    );
+
+    const latencyResult = await this.databaseService.opsQuery<{
+      sample_count: number | string;
+      median_ms: number | string;
+      p95_ms: number | string;
+      max_ms: number | string;
+    }>(
+      `
+        select
+          count(*)::int as sample_count,
+          coalesce(
+            percentile_cont(0.5) within group (
+              order by extract(epoch from (processed_at - request_received_at)) * 1000
+            ),
+            0
+          ) as median_ms,
+          coalesce(
+            percentile_cont(0.95) within group (
+              order by extract(epoch from (processed_at - request_received_at)) * 1000
+            ),
+            0
+          ) as p95_ms,
+          coalesce(
+            max(extract(epoch from (processed_at - request_received_at)) * 1000),
+            0
+          ) as max_ms
+        from ingest_event_log
+        where request_received_at >= now() - make_interval(mins => $1)
+          and processed_at is not null
+          and process_status = 'DONE'
+      `,
+      [normalizedWindowMinutes]
+    );
+
+    const totalsRow = totalsResult.rows[0];
+    const received = Number(totalsRow?.received ?? 0);
+    const done = Number(totalsRow?.done ?? 0);
+    const failed = Number(totalsRow?.failed ?? 0);
+    const processing = Number(totalsRow?.processing ?? 0);
+    const pending = Number(totalsRow?.pending ?? 0);
+    const terminal = Number(totalsRow?.terminal ?? 0);
+
+    const successRate = received === 0 ? 1 : done / received;
+    const failureRate = received === 0 ? 0 : failed / received;
+
+    const latencyRow = latencyResult.rows[0];
+    const sampleCount = Number(latencyRow?.sample_count ?? 0);
+    const median = Number(latencyRow?.median_ms ?? 0);
+    const p95 = Number(latencyRow?.p95_ms ?? 0);
+    const max = Number(latencyRow?.max_ms ?? 0);
+
+    return {
+      windowMinutes: normalizedWindowMinutes,
+      totals: {
+        received,
+        done,
+        failed,
+        processing,
+        pending,
+        terminal
+      },
+      successRate,
+      failureRate,
+      latenciesMs: {
+        sampleCount,
+        median,
+        p95,
+        max
+      }
+    };
+  }
+
   async updateDeadLetterStatus(input: {
     deadLetterKey: string;
     toStatus: IngestDeadLetterStatus;
@@ -1039,6 +1155,14 @@ export class IngestService {
       return normalized;
     }
     throw new BadRequestException(`INVALID_DEAD_LETTER_STATUS:${status}`);
+  }
+
+  private normalizeWindowMinutes(value: number): number {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return 60;
+    }
+    return Math.min(Math.max(Math.floor(numeric), 1), 1_440);
   }
 
   private rethrowIfIngestSchemaMissing(error: unknown) {

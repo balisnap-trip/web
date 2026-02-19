@@ -1,5 +1,5 @@
-import { Controller, Get } from "@nestjs/common";
-import { ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Controller, Get, Query } from "@nestjs/common";
+import { ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { successEnvelope } from "../../common/http/envelope";
 import { IngestQueueService } from "./ingest-queue.service";
 import { IngestService } from "./ingest.service";
@@ -24,5 +24,16 @@ export class IngestMetricsController {
       queue,
       deadLetter
     });
+  }
+
+  @Get("processing")
+  @ApiOperation({ summary: "Get ingest processing metrics (rolling window)" })
+  @ApiQuery({ name: "windowMinutes", required: false, example: 60 })
+  async processing(@Query("windowMinutes") windowMinutes?: string) {
+    const parsedWindowMinutes = Number.isFinite(Number(windowMinutes))
+      ? Number(windowMinutes)
+      : undefined;
+
+    return successEnvelope(await this.ingestService.getProcessingMetrics(parsedWindowMinutes));
   }
 }
