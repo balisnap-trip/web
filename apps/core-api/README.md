@@ -167,6 +167,31 @@ Gate report JSON akan ditulis ke:
 
 - `reports/gates/ingest-dlq-growth/{timestamp}.json`
 
+## Ingest Processing Gate (F-01/F-02)
+
+Run automated gate check for:
+
+- `F-01` event success rate `>= 99.5%` (rolling window)
+- `F-02` latency median `<= 3s` and p95 `<= 15s` (rolling window)
+
+```bash
+set CORE_API_BASE_URL=http://localhost:4000
+set GATE_WINDOW_MINUTES=60
+set GATE_MIN_SUCCESS_RATE=0.995
+set GATE_MAX_MEDIAN_MS=3000
+set GATE_MAX_P95_MS=15000
+pnpm --filter @bst/core-api gate:ingest-processing
+```
+
+Optional thresholds:
+
+- `GATE_MIN_RECEIVED` (default `1`)
+- `GATE_MIN_LATENCY_SAMPLE` (default `1`)
+
+Gate report JSON akan ditulis ke:
+
+- `reports/gates/ingest-processing/{timestamp}.json`
+
 ## Error Envelope
 
 HTTP errors are wrapped with:

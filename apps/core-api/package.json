@@ -10,6 +10,7 @@
     "migrate:phase2": "node scripts/phase2-migrate.mjs",
     "smoke:ingest-contract": "node scripts/ingest-contract-smoke.mjs",
     "load:ingest-burst": "node scripts/ingest-burst-load.mjs",
+    "gate:ingest-processing": "node scripts/ingest-processing-gate.mjs",
     "gate:ingest-dlq-growth": "node scripts/ingest-dlq-growth-gate.mjs",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
