@@ -1,5 +1,11 @@
-import { BadRequestException, Injectable, UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException
+} from "@nestjs/common";
 import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { DatabaseService } from "../database/database.service";
 
 export interface IngestSecurityValidationInput {
   method: string;
@@ -10,24 +16,26 @@ export interface IngestSecurityValidationInput {
 
 export interface IngestSecurityValidationResult {
   idempotencyKey: string;
+  nonce: string;
+  payloadHash: string;
+  signatureVerified: boolean;
 }
 
 @Injectable()
 export class IngestSecurityService {
-  private readonly nonceStore = new Map<string, number>();
   private readonly serviceToken: string;
   private readonly serviceSecret: string;
   private readonly driftWindowMs: number;
-  private readonly nonceTtlMs: number;
+  private readonly nonceTtlMinutes: number;
 
-  constructor() {
+  constructor(private readonly databaseService: DatabaseService) {
     this.serviceToken = process.env.INGEST_SERVICE_TOKEN || "dev-service-token";
     this.serviceSecret = process.env.INGEST_SERVICE_SECRET || "dev-service-secret";
-    this.driftWindowMs = this.toMinutes(process.env.INGEST_TIMESTAMP_DRIFT_MINUTES, 5);
-    this.nonceTtlMs = this.toMinutes(process.env.INGEST_NONCE_TTL_MINUTES, 10);
+    this.driftWindowMs = this.toMinutesMilliseconds(process.env.INGEST_TIMESTAMP_DRIFT_MINUTES, 5);
+    this.nonceTtlMinutes = this.toMinutesNumber(process.env.INGEST_NONCE_TTL_MINUTES, 10);
   }
 
-  validateRequest(input: IngestSecurityValidationInput): IngestSecurityValidationResult {
+  async validateRequest(input: IngestSecurityValidationInput): Promise<IngestSecurityValidationResult> {
     const authorization = this.getHeader(input.headers, "authorization");
     const signature = this.getHeader(input.headers, "x-signature");
     const signatureAlgorithm = this.getHeader(input.headers, "x-signature-algorithm");
@@ -53,16 +61,16 @@ export class IngestSecurityService {
     }
 
     this.assertTimestampDrift(timestamp);
-    this.assertNonceUnique(nonce);
+    await this.assertNonceUnique(nonce);
 
-    const bodyHash = this.sha256Hex(input.rawBody);
+    const payloadHash = this.sha256Hex(input.rawBody);
     const canonicalString = [
       input.method.toUpperCase(),
       input.path,
       timestamp,
       nonce,
       idempotencyKey,
-      bodyHash
+      payloadHash
     ].join("\n");
 
     const expectedSignature = createHmac("sha256", this.serviceSecret)
@@ -74,7 +82,10 @@ export class IngestSecurityService {
     }
 
     return {
-      idempotencyKey
+      idempotencyKey,
+      nonce,
+      payloadHash,
+      signatureVerified: true
     };
   }
 
@@ -90,23 +101,37 @@ export class IngestSecurityService {
     }
   }
 
-  private assertNonceUnique(nonce: string) {
-    this.cleanupExpiredNonces();
+  private async assertNonceUnique(nonce: string) {
+    try {
+      const result = await this.databaseService.opsQuery(
+        `
+          select 1
+          from ingest_event_log
+          where nonce = $1
+            and request_received_at >= now() - ($2::int * interval '1 minute')
+          limit 1
+        `,
+        [nonce, this.nonceTtlMinutes]
+      );
 
-    const activeUntil = this.nonceStore.get(nonce);
-    if (activeUntil && activeUntil > Date.now()) {
-      throw new UnauthorizedException("NONCE_REUSED");
-    }
-
-    this.nonceStore.set(nonce, Date.now() + this.nonceTtlMs);
-  }
-
-  private cleanupExpiredNonces() {
-    const now = Date.now();
-    for (const [nonce, expiresAt] of this.nonceStore.entries()) {
-      if (expiresAt <= now) {
-        this.nonceStore.delete(nonce);
+      if (result.rows.length > 0) {
+        throw new UnauthorizedException("NONCE_REUSED");
       }
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+
+      const pgErrorCode =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: string }).code)
+          : null;
+
+      if (pgErrorCode === "42P01") {
+        throw new ServiceUnavailableException("INGEST_SCHEMA_NOT_READY");
+      }
+
+      throw new ServiceUnavailableException("NONCE_VALIDATION_FAILED");
     }
   }
 
@@ -143,9 +168,14 @@ export class IngestSecurityService {
     return createHash("sha256").update(rawBody).digest("hex");
   }
 
-  private toMinutes(input: string | undefined, fallbackMinutes: number): number {
+  private toMinutesMilliseconds(input: string | undefined, fallbackMinutes: number): number {
     const value = Number(input);
     const minutes = Number.isFinite(value) && value > 0 ? value : fallbackMinutes;
     return minutes * 60 * 1000;
+  }
+
+  private toMinutesNumber(input: string | undefined, fallbackMinutes: number): number {
+    const value = Number(input);
+    return Number.isFinite(value) && value > 0 ? value : fallbackMinutes;
   }
 }

@@ -41,7 +41,14 @@ pnpm --filter @bst/core-api migrate:phase2
 - `x-signature`
 - `x-timestamp` (drift <= 5 minutes)
 - `x-nonce` (replay protection window 10 minutes)
-- `x-idempotency-key` (default retention 35 days in in-memory store)
+- `x-idempotency-key` (retained in `ingest_event_log` with 35-day policy)
+
+Ingest storage behavior:
+
+- accepted events are persisted to `ingest_event_log` in `ops_db`
+- nonce replay check is validated from `ingest_event_log` within TTL window
+- idempotency uses `idempotency_key` + secondary dedup key
+- replay endpoint requires event to exist in `ingest_dead_letter`
 
 ## Error Envelope
 

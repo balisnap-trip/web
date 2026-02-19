@@ -1,5 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException
+} from "@nestjs/common";
 import { randomUUID } from "crypto";
+import { DatabaseService } from "../database/database.service";
 
 export type IngestProcessStatus = "RECEIVED" | "PROCESSING" | "DONE" | "FAILED";
 
@@ -11,99 +18,511 @@ export interface IngestEventRecord {
   payload: unknown;
   createdAt: string;
   updatedAt: string;
+  source: string;
+  channelCode: string;
+  externalBookingRef: string;
+  eventType: string;
+  eventTime: string;
+  eventTimeNormalized: string;
+  nonce: string;
+  payloadHash: string;
+  errorMessage: string | null;
 }
 
-interface IngestIdempotencyEntry {
-  expiresAtMs: number;
-  record: IngestEventRecord;
+interface IngestCreateInput {
+  payload: unknown;
+  idempotencyKey: string;
+  nonce: string;
+  payloadHash: string;
+  signatureVerified: boolean;
+}
+
+interface ParsedPayload {
+  source: string;
+  channelCode: string;
+  externalBookingRef: string;
+  eventType: string;
+  eventTime: string;
+  eventTimeNormalized: string;
+}
+
+interface IngestEventRow {
+  event_key: string;
+  idempotency_key: string;
+  process_status: string;
+  raw_payload: unknown;
+  created_at: Date | string;
+  updated_at: Date | string;
+  source_enum: string;
+  channel_code: string;
+  external_booking_ref: string;
+  event_type: string;
+  event_time: Date | string;
+  event_time_normalized: Date | string;
+  nonce: string;
+  payload_hash: string;
+  error_message: string | null;
+  replay_count: number | null;
 }
 
 @Injectable()
 export class IngestService {
-  private readonly byIdempotency = new Map<string, IngestIdempotencyEntry>();
-  private readonly byEventId = new Map<string, IngestEventRecord>();
-  private readonly idempotencyTtlMs: number;
+  constructor(private readonly databaseService: DatabaseService) {}
 
-  constructor() {
-    this.idempotencyTtlMs = this.toDays(process.env.INGEST_IDEMPOTENCY_TTL_DAYS, 35);
-  }
-
-  createEvent(payload: unknown, idempotencyKey?: string) {
-    if (!idempotencyKey) {
-      throw new BadRequestException("Missing x-idempotency-key header");
-    }
-
-    this.cleanupExpiredIdempotencyKeys();
-
-    const existing = this.byIdempotency.get(idempotencyKey);
-    if (existing) {
+  async createEvent(input: IngestCreateInput) {
+    const parsedPayload = this.parsePayload(input.payload);
+    const existingByIdempotency = await this.findByIdempotency(input.idempotencyKey);
+    if (existingByIdempotency) {
       return {
-        record: existing.record,
+        record: existingByIdempotency,
         idempotentReplay: true
       };
     }
 
-    const now = new Date().toISOString();
-    const record: IngestEventRecord = {
-      eventId: randomUUID(),
-      idempotencyKey,
-      processStatus: "RECEIVED",
-      replayCount: 0,
-      payload,
-      createdAt: now,
-      updatedAt: now
-    };
+    const existingBySecondaryDedup = await this.findBySecondaryDedup(parsedPayload);
+    if (existingBySecondaryDedup) {
+      return {
+        record: existingBySecondaryDedup,
+        idempotentReplay: true
+      };
+    }
 
-    this.byIdempotency.set(idempotencyKey, {
-      record,
-      expiresAtMs: Date.now() + this.idempotencyTtlMs
-    });
-    this.byEventId.set(record.eventId, record);
+    const eventKey = randomUUID();
+    try {
+      const result = await this.databaseService.opsQuery<IngestEventRow>(
+        `
+          insert into ingest_event_log (
+            event_key,
+            idempotency_key,
+            nonce,
+            source_enum,
+            channel_code,
+            external_booking_ref,
+            event_type,
+            event_time,
+            event_time_normalized,
+            payload_hash,
+            signature_verified,
+            process_status,
+            attempt_count,
+            request_received_at,
+            raw_payload,
+            created_at
+          ) values (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8::timestamptz,
+            $9::timestamptz,
+            $10,
+            $11,
+            'RECEIVED',
+            0,
+            now(),
+            $12::jsonb,
+            now()
+          )
+          returning
+            event_key,
+            idempotency_key,
+            process_status,
+            raw_payload,
+            created_at,
+            coalesce(processed_at, request_received_at, created_at) as updated_at,
+            source_enum,
+            channel_code,
+            external_booking_ref,
+            event_type,
+            event_time,
+            event_time_normalized,
+            nonce,
+            payload_hash,
+            error_message,
+            0::int as replay_count
+        `,
+        [
+          eventKey,
+          input.idempotencyKey,
+          input.nonce,
+          parsedPayload.source,
+          parsedPayload.channelCode,
+          parsedPayload.externalBookingRef,
+          parsedPayload.eventType,
+          parsedPayload.eventTime,
+          parsedPayload.eventTimeNormalized,
+          input.payloadHash,
+          input.signatureVerified,
+          JSON.stringify(input.payload ?? {})
+        ]
+      );
 
-    return {
-      record,
-      idempotentReplay: false
-    };
+      return {
+        record: this.mapRow(result.rows[0]),
+        idempotentReplay: false
+      };
+    } catch (error) {
+      this.rethrowIfIngestSchemaMissing(error);
+
+      const pgErrorCode =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: string }).code)
+          : null;
+
+      if (pgErrorCode === "23505") {
+        const existingAfterRace = await this.findByIdempotency(input.idempotencyKey);
+        if (existingAfterRace) {
+          return {
+            record: existingAfterRace,
+            idempotentReplay: true
+          };
+        }
+      }
+      if (pgErrorCode === "23503") {
+        throw new BadRequestException("CHANNEL_NOT_REGISTERED");
+      }
+
+      throw new ServiceUnavailableException("INGEST_INSERT_FAILED");
+    }
   }
 
-  getEvent(eventId: string): IngestEventRecord {
-    const event = this.byEventId.get(eventId);
-    if (!event) {
+  async getEvent(eventId: string): Promise<IngestEventRecord> {
+    const result = await this.databaseService.opsQuery<IngestEventRow>(
+      `
+        select
+          i.event_key,
+          i.idempotency_key,
+          i.process_status,
+          i.raw_payload,
+          i.created_at,
+          coalesce(i.processed_at, i.request_received_at, i.created_at) as updated_at,
+          i.source_enum,
+          i.channel_code,
+          i.external_booking_ref,
+          i.event_type,
+          i.event_time,
+          i.event_time_normalized,
+          i.nonce,
+          i.payload_hash,
+          i.error_message,
+          coalesce(d.replay_count, 0) as replay_count
+        from ingest_event_log i
+        left join lateral (
+          select replay_count
+          from ingest_dead_letter
+          where event_key = i.event_key
+          order by updated_at desc
+          limit 1
+        ) d on true
+        where i.event_key = $1
+      `,
+      [eventId]
+    );
+
+    if (result.rows.length === 0) {
       throw new NotFoundException(`Ingest event not found: ${eventId}`);
     }
-    return event;
+    return this.mapRow(result.rows[0]);
   }
 
-  replayEvent(eventId: string) {
-    const event = this.getEvent(eventId);
-    const now = new Date().toISOString();
-    const updated: IngestEventRecord = {
-      ...event,
-      processStatus: "RECEIVED",
-      replayCount: event.replayCount + 1,
-      updatedAt: now
-    };
+  async replayEvent(eventId: string): Promise<IngestEventRecord> {
+    const replayed = await this.databaseService.withOpsTransaction(async (client) => {
+      const eventResult = await client.query<IngestEventRow>(
+        `
+          select
+            event_key,
+            idempotency_key,
+            process_status,
+            raw_payload,
+            created_at,
+            coalesce(processed_at, request_received_at, created_at) as updated_at,
+            source_enum,
+            channel_code,
+            external_booking_ref,
+            event_type,
+            event_time,
+            event_time_normalized,
+            nonce,
+            payload_hash,
+            error_message,
+            0::int as replay_count
+          from ingest_event_log
+          where event_key = $1
+          for update
+        `,
+        [eventId]
+      );
 
-    this.byEventId.set(eventId, updated);
-    this.byIdempotency.set(updated.idempotencyKey, {
-      record: updated,
-      expiresAtMs: Date.now() + this.idempotencyTtlMs
-    });
-    return updated;
-  }
-
-  private cleanupExpiredIdempotencyKeys() {
-    const now = Date.now();
-    for (const [key, entry] of this.byIdempotency.entries()) {
-      if (entry.expiresAtMs <= now) {
-        this.byIdempotency.delete(key);
+      if (eventResult.rows.length === 0) {
+        throw new NotFoundException(`Ingest event not found: ${eventId}`);
       }
+
+      const deadLetterResult = await client.query<{
+        dead_letter_key: string;
+        replay_count: number;
+        status: string;
+      }>(
+        `
+          select dead_letter_key, replay_count, status
+          from ingest_dead_letter
+          where event_key = $1
+          order by updated_at desc
+          limit 1
+          for update
+        `,
+        [eventId]
+      );
+
+      if (deadLetterResult.rows.length === 0) {
+        throw new ConflictException("EVENT_NOT_IN_DEAD_LETTER");
+      }
+
+      const deadLetter = deadLetterResult.rows[0];
+      if (!["OPEN", "READY", "FAILED", "REPLAYING"].includes(deadLetter.status)) {
+        throw new ConflictException(`DEAD_LETTER_STATUS_NOT_REPLAYABLE:${deadLetter.status}`);
+      }
+
+      await client.query(
+        `
+          update ingest_dead_letter
+          set replay_count = replay_count + 1,
+              status = 'REPLAYING',
+              next_replay_at = null,
+              updated_at = now()
+          where dead_letter_key = $1
+        `,
+        [deadLetter.dead_letter_key]
+      );
+
+      const updated = await client.query<IngestEventRow>(
+        `
+          update ingest_event_log
+          set process_status = 'RECEIVED',
+              attempt_count = attempt_count + 1,
+              next_retry_at = null,
+              error_message = null
+          where event_key = $1
+          returning
+            event_key,
+            idempotency_key,
+            process_status,
+            raw_payload,
+            created_at,
+            coalesce(processed_at, request_received_at, created_at) as updated_at,
+            source_enum,
+            channel_code,
+            external_booking_ref,
+            event_type,
+            event_time,
+            event_time_normalized,
+            nonce,
+            payload_hash,
+            error_message,
+            $2::int as replay_count
+        `,
+        [eventId, deadLetter.replay_count + 1]
+      );
+
+      return this.mapRow(updated.rows[0]);
+    });
+
+    return replayed;
+  }
+
+  private async findByIdempotency(idempotencyKey: string): Promise<IngestEventRecord | null> {
+    try {
+      const result = await this.databaseService.opsQuery<IngestEventRow>(
+        `
+          select
+            i.event_key,
+            i.idempotency_key,
+            i.process_status,
+            i.raw_payload,
+            i.created_at,
+            coalesce(i.processed_at, i.request_received_at, i.created_at) as updated_at,
+            i.source_enum,
+            i.channel_code,
+            i.external_booking_ref,
+            i.event_type,
+            i.event_time,
+            i.event_time_normalized,
+            i.nonce,
+            i.payload_hash,
+            i.error_message,
+            coalesce(d.replay_count, 0) as replay_count
+          from ingest_event_log i
+          left join lateral (
+            select replay_count
+            from ingest_dead_letter
+            where event_key = i.event_key
+            order by updated_at desc
+            limit 1
+          ) d on true
+          where i.idempotency_key = $1
+          limit 1
+        `,
+        [idempotencyKey]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+      return this.mapRow(result.rows[0]);
+    } catch (error) {
+      this.rethrowIfIngestSchemaMissing(error);
+      throw new ServiceUnavailableException("INGEST_LOOKUP_FAILED");
     }
   }
 
-  private toDays(input: string | undefined, fallbackDays: number): number {
-    const value = Number(input);
-    const days = Number.isFinite(value) && value > 0 ? value : fallbackDays;
-    return days * 24 * 60 * 60 * 1000;
+  private async findBySecondaryDedup(payload: ParsedPayload): Promise<IngestEventRecord | null> {
+    try {
+      const result = await this.databaseService.opsQuery<IngestEventRow>(
+        `
+          select
+            i.event_key,
+            i.idempotency_key,
+            i.process_status,
+            i.raw_payload,
+            i.created_at,
+            coalesce(i.processed_at, i.request_received_at, i.created_at) as updated_at,
+            i.source_enum,
+            i.channel_code,
+            i.external_booking_ref,
+            i.event_type,
+            i.event_time,
+            i.event_time_normalized,
+            i.nonce,
+            i.payload_hash,
+            i.error_message,
+            coalesce(d.replay_count, 0) as replay_count
+          from ingest_event_log i
+          left join lateral (
+            select replay_count
+            from ingest_dead_letter
+            where event_key = i.event_key
+            order by updated_at desc
+            limit 1
+          ) d on true
+          where i.source_enum = $1
+            and i.external_booking_ref = $2
+            and i.event_type = $3
+            and i.event_time_normalized = $4::timestamptz
+          limit 1
+        `,
+        [
+          payload.source,
+          payload.externalBookingRef,
+          payload.eventType,
+          payload.eventTimeNormalized
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+      return this.mapRow(result.rows[0]);
+    } catch (error) {
+      this.rethrowIfIngestSchemaMissing(error);
+      throw new ServiceUnavailableException("INGEST_SECONDARY_DEDUP_LOOKUP_FAILED");
+    }
+  }
+
+  private parsePayload(payload: unknown): ParsedPayload {
+    if (!payload || typeof payload !== "object") {
+      throw new BadRequestException("INVALID_INGEST_PAYLOAD");
+    }
+
+    const row = payload as Record<string, unknown>;
+
+    const payloadVersion = this.readString(row.payloadVersion, "payloadVersion").toLowerCase();
+    const source = this.readString(row.source, "source").toUpperCase();
+    const eventType = this.readString(row.eventType, "eventType").toUpperCase();
+    const externalBookingRef = this.readString(row.externalBookingRef, "externalBookingRef");
+    const eventTime = this.readString(row.eventTime, "eventTime");
+    const normalizedEventTime = this.normalizeEventTime(eventTime);
+
+    if (!["DIRECT", "GYG", "VIATOR", "BOKUN", "TRIPDOTCOM", "MANUAL"].includes(source)) {
+      throw new BadRequestException(`UNSUPPORTED_SOURCE:${source}`);
+    }
+
+    if (payloadVersion !== "v1") {
+      throw new BadRequestException(`UNSUPPORTED_PAYLOAD_VERSION:${payloadVersion}`);
+    }
+
+    if (!["CREATED", "UPDATED", "CANCELLED"].includes(eventType)) {
+      throw new BadRequestException(`UNSUPPORTED_EVENT_TYPE:${eventType}`);
+    }
+
+    return {
+      source,
+      channelCode: source,
+      externalBookingRef,
+      eventType,
+      eventTime,
+      eventTimeNormalized: normalizedEventTime
+    };
+  }
+
+  private normalizeEventTime(eventTime: string): string {
+    const parsed = new Date(eventTime);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException("INVALID_EVENT_TIME");
+    }
+    parsed.setMilliseconds(0);
+    return parsed.toISOString();
+  }
+
+  private readString(value: unknown, fieldName: string): string {
+    if (typeof value !== "string") {
+      throw new BadRequestException(`INVALID_FIELD_${fieldName.toUpperCase()}`);
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      throw new BadRequestException(`EMPTY_FIELD_${fieldName.toUpperCase()}`);
+    }
+    return trimmed;
+  }
+
+  private mapRow(row: IngestEventRow): IngestEventRecord {
+    return {
+      eventId: row.event_key,
+      idempotencyKey: row.idempotency_key,
+      processStatus: this.mapStatus(row.process_status),
+      replayCount: Number(row.replay_count ?? 0),
+      payload: row.raw_payload,
+      createdAt: new Date(row.created_at).toISOString(),
+      updatedAt: new Date(row.updated_at).toISOString(),
+      source: row.source_enum,
+      channelCode: row.channel_code,
+      externalBookingRef: row.external_booking_ref,
+      eventType: row.event_type,
+      eventTime: new Date(row.event_time).toISOString(),
+      eventTimeNormalized: new Date(row.event_time_normalized).toISOString(),
+      nonce: row.nonce,
+      payloadHash: row.payload_hash,
+      errorMessage: row.error_message
+    };
+  }
+
+  private mapStatus(rawStatus: string): IngestProcessStatus {
+    if (rawStatus === "RECEIVED" || rawStatus === "PROCESSING" || rawStatus === "DONE" || rawStatus === "FAILED") {
+      return rawStatus;
+    }
+    return "FAILED";
+  }
+
+  private rethrowIfIngestSchemaMissing(error: unknown) {
+    const pgErrorCode =
+      error && typeof error === "object" && "code" in error
+        ? String((error as { code?: string }).code)
+        : null;
+
+    if (pgErrorCode === "42P01") {
+      throw new ServiceUnavailableException("INGEST_SCHEMA_NOT_READY");
+    }
   }
 }

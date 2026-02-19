@@ -1,5 +1,5 @@
-import { Injectable, OnModuleDestroy } from "@nestjs/common";
-import { Pool } from "pg";
+import { Injectable, OnModuleDestroy, ServiceUnavailableException } from "@nestjs/common";
+import { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
 
 export interface DatabaseHealthItem {
   database: "ops_db" | "channel_db";
@@ -39,6 +39,39 @@ export class DatabaseService implements OnModuleDestroy {
       status: isDegraded ? "degraded" : "ok",
       checks
     };
+  }
+
+  isOpsConfigured(): boolean {
+    return Boolean(this.opsPool);
+  }
+
+  async opsQuery<T extends QueryResultRow = QueryResultRow>(
+    text: string,
+    values: unknown[] = []
+  ): Promise<QueryResult<T>> {
+    if (!this.opsPool) {
+      throw new ServiceUnavailableException("OPS_DB_NOT_CONFIGURED");
+    }
+    return this.opsPool.query<T>(text, values);
+  }
+
+  async withOpsTransaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
+    if (!this.opsPool) {
+      throw new ServiceUnavailableException("OPS_DB_NOT_CONFIGURED");
+    }
+
+    const client = await this.opsPool.connect();
+    try {
+      await client.query("begin");
+      const result = await callback(client);
+      await client.query("commit");
+      return result;
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   private createPool(connectionString?: string): Pool | null {
