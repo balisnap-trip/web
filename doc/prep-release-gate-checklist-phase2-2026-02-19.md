@@ -190,6 +190,23 @@ Verifikasi actor-level rollout:
 
 1. endpoint internal `GET /api/ops/cutover-state` di `bstadmin` mengembalikan hasil evaluasi canary untuk user yang sedang login.
 
+## 4.5 Gate Automation Commands (Batch H - H-01)
+
+`bstadmin` menyediakan command otomatis untuk gate mismatch dual-write:
+
+1. `H-01` dual-write mismatch per jam:
+   1. `pnpm --filter bst-admin gate:write-cutover`
+
+Output evidence:
+
+1. `reports/gates/write-cutover/{timestamp}.json`
+2. `reports/gates/write-cutover/{timestamp}.md`
+
+Workflow automation:
+
+1. GitHub manual workflow:
+   1. `.github/workflows/write-cutover-mismatch-gate.yml`
+
 ## 5. Gate Result Template
 
 ```md

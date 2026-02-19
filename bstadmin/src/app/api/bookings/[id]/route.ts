@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { syncBookingStatus } from '@/lib/booking/status'
+import { safeRecordWriteCutoverAudit } from '@/lib/cutover/write-cutover'
 import {
   assignCoreOpsBooking,
   fetchCoreOpsBookingDetail,
@@ -146,6 +147,27 @@ export async function PATCH(
     )
   }
 
+  let writeCutoverAudit:
+    | {
+        userId: string
+        actorRole: string
+        bookingId: number
+        operation: string
+        coreAttempted: boolean
+        coreSuccess: boolean | null
+        coreStatus: number | null
+        coreError: string | null
+        strictMode: boolean
+        fallbackUsed: boolean
+        legacyAttempted: boolean
+        legacySuccess: boolean | null
+        legacyError: string | null
+        metadata: Record<string, unknown>
+        ipAddress: string
+        userAgent: string
+      }
+    | null = null
+
   try {
     const { id } = await params
     const bookingId = parseInt(id)
@@ -185,20 +207,64 @@ export async function PATCH(
     }
 
     const coreLookupId = existingBooking.bookingRef?.trim() || String(existingBooking.id)
-    if (
-      isOpsWriteCoreEnabledForActor({
-        id: session.user.id,
-        email: session.user.email,
-      })
-    ) {
+    const writeCoreEnabled = isOpsWriteCoreEnabledForActor({
+      id: session.user.id,
+      email: session.user.email,
+    })
+    const strictMode = isOpsWriteCoreStrict()
+
+    writeCutoverAudit = {
+      userId: session.user.id,
+      actorRole: session.user.role,
+      bookingId,
+      operation: 'BOOKING_PATCH',
+      coreAttempted: false,
+      coreSuccess: null,
+      coreStatus: null,
+      coreError: null,
+      strictMode,
+      fallbackUsed: false,
+      legacyAttempted: false,
+      legacySuccess: null,
+      legacyError: null,
+      metadata: { coreLookupId },
+      ipAddress:
+        req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      userAgent: req.headers.get('user-agent') || 'unknown',
+    }
+
+    const markCoreResult = (
+      result: { ok: boolean; status: number; error: string | null },
+      scope: string
+    ) => {
+      writeCutoverAudit!.coreAttempted = true
+      if (result.ok) {
+        if (writeCutoverAudit!.coreSuccess !== false) {
+          writeCutoverAudit!.coreSuccess = true
+          writeCutoverAudit!.coreStatus = result.status
+        }
+        return
+      }
+
+      writeCutoverAudit!.coreSuccess = false
+      writeCutoverAudit!.coreStatus = result.status
+      writeCutoverAudit!.coreError = `${scope}:${result.error || `CORE_API_HTTP_${result.status}`}`
+    }
+
+    if (writeCoreEnabled) {
       if (note !== undefined || meetingPoint !== undefined) {
         const corePatchResult = await patchCoreOpsBooking(coreLookupId, {
           note,
           meetingPoint,
         })
+        markCoreResult(corePatchResult, 'patch')
 
         if (!corePatchResult.ok) {
-          if (isOpsWriteCoreStrict()) {
+          if (strictMode) {
+            writeCutoverAudit.legacyAttempted = false
+            writeCutoverAudit.legacySuccess = false
+            writeCutoverAudit.legacyError = 'STRICT_MODE_ABORTED'
+            await safeRecordWriteCutoverAudit(writeCutoverAudit)
             return NextResponse.json(
               {
                 error: `core-api patch failed: ${corePatchResult.error}`,
@@ -206,6 +272,7 @@ export async function PATCH(
               { status: 502 }
             )
           }
+          writeCutoverAudit.fallbackUsed = true
           console.warn(
             '[API /bookings/[id]] core-api patch fallback:',
             corePatchResult.status,
@@ -219,9 +286,14 @@ export async function PATCH(
           assignedDriverId
             ? await assignCoreOpsBooking(coreLookupId, Number(assignedDriverId))
             : await unassignCoreOpsBooking(coreLookupId)
+        markCoreResult(coreAssignResult, assignedDriverId ? 'assign' : 'unassign')
 
         if (!coreAssignResult.ok) {
-          if (isOpsWriteCoreStrict()) {
+          if (strictMode) {
+            writeCutoverAudit.legacyAttempted = false
+            writeCutoverAudit.legacySuccess = false
+            writeCutoverAudit.legacyError = 'STRICT_MODE_ABORTED'
+            await safeRecordWriteCutoverAudit(writeCutoverAudit)
             return NextResponse.json(
               {
                 error: `core-api assignment failed: ${coreAssignResult.error}`,
@@ -229,6 +301,7 @@ export async function PATCH(
               { status: 502 }
             )
           }
+          writeCutoverAudit.fallbackUsed = true
           console.warn(
             '[API /bookings/[id]] core-api assignment fallback:',
             coreAssignResult.status,
@@ -236,7 +309,21 @@ export async function PATCH(
           )
         } else {
           const coreSyncResult = await syncCoreOpsBookingStatus(coreLookupId)
+          markCoreResult(coreSyncResult, 'status-sync')
           if (!coreSyncResult.ok) {
+            if (strictMode) {
+              writeCutoverAudit.legacyAttempted = false
+              writeCutoverAudit.legacySuccess = false
+              writeCutoverAudit.legacyError = 'STRICT_MODE_ABORTED'
+              await safeRecordWriteCutoverAudit(writeCutoverAudit)
+              return NextResponse.json(
+                {
+                  error: `core-api sync failed: ${coreSyncResult.error}`,
+                },
+                { status: 502 }
+              )
+            }
+            writeCutoverAudit.fallbackUsed = true
             console.warn(
               '[API /bookings/[id]] core-api sync warning:',
               coreSyncResult.status,
@@ -247,6 +334,7 @@ export async function PATCH(
       }
     }
 
+    writeCutoverAudit.legacyAttempted = true
     const booking = await prisma.booking.update({
       where: { id: bookingId },
       data: updateData,
@@ -261,6 +349,11 @@ export async function PATCH(
       await syncBookingStatus(prisma, booking.id)
     }
 
+    writeCutoverAudit.legacySuccess = true
+    if (writeCutoverAudit.coreAttempted) {
+      await safeRecordWriteCutoverAudit(writeCutoverAudit)
+    }
+
     return NextResponse.json({
       success: true,
       booking: {
@@ -269,6 +362,12 @@ export async function PATCH(
       },
     })
   } catch (error) {
+    if (writeCutoverAudit?.coreAttempted) {
+      writeCutoverAudit.legacySuccess = false
+      writeCutoverAudit.legacyError =
+        error instanceof Error ? error.message : String(error)
+      await safeRecordWriteCutoverAudit(writeCutoverAudit)
+    }
     console.error('[API /bookings/[id]] Error updating booking:', error)
     return NextResponse.json(
       {

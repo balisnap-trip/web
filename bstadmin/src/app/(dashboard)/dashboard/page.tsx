@@ -146,6 +146,20 @@ interface OpsCutoverState {
   writeStrict: boolean
 }
 
+interface WriteCutoverMetrics {
+  result: 'PASS' | 'FAIL'
+  thresholds: {
+    maxMismatchRatio: number
+    minSamples: number
+  }
+  summary: {
+    coreAttempted: number
+    mismatch: number
+    mismatchRatio: number
+    hasEnoughSamples: boolean
+  }
+}
+
 const SOURCE_COLORS: Record<string, string> = {
   GYG: '#4F46E5',
   VIATOR: '#10B981',
@@ -163,6 +177,7 @@ export default function DashboardPage() {
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([])
   const [coreMetrics, setCoreMetrics] = useState<CoreApiDashboardMetrics | null>(null)
   const [cutoverState, setCutoverState] = useState<OpsCutoverState | null>(null)
+  const [writeCutoverMetrics, setWriteCutoverMetrics] = useState<WriteCutoverMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const { notify } = useNotifications()
 
@@ -172,14 +187,16 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [dashboardRes, coreMetricsRes, cutoverRes] = await Promise.all([
+      const [dashboardRes, coreMetricsRes, cutoverRes, writeCutoverRes] = await Promise.all([
         fetch('/api/dashboard/stats'),
         fetch('/api/observability/core-api?windowMinutes=15&processingWindowMinutes=60'),
         fetch('/api/ops/cutover-state'),
+        fetch('/api/ops/cutover-metrics/write?windowMinutes=60'),
       ])
       const data = await dashboardRes.json()
       const coreData = await coreMetricsRes.json().catch(() => null)
       const cutoverData = await cutoverRes.json().catch(() => null)
+      const writeCutoverData = await writeCutoverRes.json().catch(() => null)
       
       if (data.stats) {
         setStats(data.stats)
@@ -201,6 +218,12 @@ export default function DashboardPage() {
         setCutoverState(cutoverData.cutover)
       } else {
         setCutoverState(null)
+      }
+
+      if (writeCutoverData?.data) {
+        setWriteCutoverMetrics(writeCutoverData.data)
+      } else {
+        setWriteCutoverMetrics(null)
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -435,6 +458,41 @@ export default function DashboardPage() {
             Core API metrics belum tersedia.
           </div>
         )}
+
+        {writeCutoverMetrics ? (
+          <div className="mt-4 rounded-lg border bg-white p-3">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                Write Cutover Mismatch (1h)
+              </div>
+              <span
+                className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                  writeCutoverMetrics.result === 'PASS'
+                    ? 'bg-emerald-100 text-emerald-700'
+                    : 'bg-red-100 text-red-700'
+                }`}
+              >
+                {writeCutoverMetrics.result}
+              </span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-4 text-sm">
+              <div className="font-semibold text-gray-900">
+                {((writeCutoverMetrics.summary.mismatchRatio || 0) * 100).toFixed(2)}%
+              </div>
+              <div className="text-gray-600">
+                mismatch: {writeCutoverMetrics.summary.mismatch} / {writeCutoverMetrics.summary.coreAttempted}
+              </div>
+              <div className="text-gray-600">
+                threshold: {(writeCutoverMetrics.thresholds.maxMismatchRatio * 100).toFixed(2)}%
+              </div>
+              {!writeCutoverMetrics.summary.hasEnoughSamples ? (
+                <div className="text-amber-600">
+                  sample belum cukup (min {writeCutoverMetrics.thresholds.minSamples})
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
       </Card>
 
       {/* Charts Row */}

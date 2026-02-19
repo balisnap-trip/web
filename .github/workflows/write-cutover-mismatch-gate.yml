@@ -1,0 +1,66 @@
+name: Write Cutover Mismatch Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      ops_write_gate_window_minutes:
+        description: "Observation window minutes"
+        required: true
+        default: "60"
+        type: string
+      ops_write_mismatch_max_ratio:
+        description: "Max mismatch ratio (0.001 = 0.1%)"
+        required: true
+        default: "0.001"
+        type: string
+      ops_write_mismatch_min_samples:
+        description: "Minimum core-attempted samples"
+        required: true
+        default: "1"
+        type: string
+
+jobs:
+  write-cutover-mismatch-gate:
+    name: Run Write Cutover Mismatch Gate (H-01)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.BSTADMIN_DATABASE_URL }}
+      OPS_WRITE_GATE_WINDOW_MINUTES: ${{ inputs.ops_write_gate_window_minutes }}
+      OPS_WRITE_MISMATCH_MAX_RATIO: ${{ inputs.ops_write_mismatch_max_ratio }}
+      OPS_WRITE_MISMATCH_MIN_SAMPLES: ${{ inputs.ops_write_mismatch_min_samples }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate BSTADMIN_DATABASE_URL secret
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Missing BSTADMIN_DATABASE_URL secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run write cutover gate
+        run: pnpm --filter bst-admin gate:write-cutover
+
+      - name: Upload write cutover reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: write-cutover-gate-reports
+          if-no-files-found: warn
+          path: reports/gates/write-cutover/**
