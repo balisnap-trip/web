@@ -113,6 +113,29 @@ The smoke script will:
 4. move DLQ status to `READY`
 5. replay the event
 
+## Ingest Burst Load Test
+
+Run burst load test against a running server:
+
+```bash
+set CORE_API_BASE_URL=http://localhost:4000
+set LOAD_TOTAL_REQUESTS=1000
+set LOAD_CONCURRENCY=50
+set LOAD_MAX_FAILURE_RATE=0.01
+set LOAD_MAX_P95_MS=1500
+pnpm --filter @bst/core-api load:ingest-burst
+```
+
+Optional tuning variables:
+
+- `LOAD_DUPLICATE_EVERY` (contoh `10` = tiap request ke-10 menduplikasi idempotency key sebelumnya)
+- `LOAD_REQUEST_TIMEOUT_MS` (default `15000`)
+- `LOAD_SOURCE` / `LOAD_EVENT_TYPE` (default `DIRECT` / `CREATED`)
+
+Load report JSON akan ditulis ke:
+
+- `reports/load/ingest/{timestamp}.json`
+
 ## Error Envelope
 
 HTTP errors are wrapped with:
