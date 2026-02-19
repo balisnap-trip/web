@@ -54,6 +54,12 @@ export interface IngestDeadLetterRecord {
   eventType: string;
 }
 
+export interface IngestProcessingFailure {
+  retryable: boolean;
+  reasonCode: string;
+  message: string;
+}
+
 interface IngestCreateInput {
   payload: unknown;
   idempotencyKey: string;
@@ -374,6 +380,97 @@ export class IngestService {
     return replayed;
   }
 
+  async markProcessingAttempt(eventId: string, attemptNumber: number) {
+    await this.databaseService.opsQuery(
+      `
+        update ingest_event_log
+        set process_status = 'PROCESSING',
+            attempt_count = greatest(attempt_count, $2),
+            error_message = null
+        where event_key = $1
+      `,
+      [eventId, attemptNumber]
+    );
+  }
+
+  async markRetryableFailure(input: {
+    eventId: string;
+    errorMessage: string;
+    nextRetryAt: string;
+  }) {
+    await this.databaseService.opsQuery(
+      `
+        update ingest_event_log
+        set process_status = 'FAILED',
+            error_message = $2,
+            next_retry_at = $3::timestamptz
+        where event_key = $1
+      `,
+      [input.eventId, input.errorMessage, input.nextRetryAt]
+    );
+  }
+
+  async markDone(eventId: string) {
+    await this.databaseService.opsQuery(
+      `
+        update ingest_event_log
+        set process_status = 'DONE',
+            processed_at = now(),
+            error_message = null,
+            next_retry_at = null
+        where event_key = $1
+      `,
+      [eventId]
+    );
+  }
+
+  async processEvent(eventId: string): Promise<void> {
+    const event = await this.getEvent(eventId);
+    const payload = event.payload && typeof event.payload === "object" ? (event.payload as Record<string, unknown>) : {};
+
+    const simulatedError = this.readOptionalString(payload._simulateProcessingError);
+    if (simulatedError === "NON_RETRYABLE") {
+      throw new BadRequestException("SCHEMA_MISMATCH");
+    }
+    if (simulatedError === "RETRYABLE") {
+      throw new Error("TRANSIENT_RUNTIME_FAILURE");
+    }
+
+    await this.markDone(eventId);
+  }
+
+  classifyProcessingError(error: unknown): IngestProcessingFailure {
+    if (error instanceof BadRequestException || error instanceof ConflictException) {
+      return {
+        retryable: false,
+        reasonCode: "SCHEMA_MISMATCH",
+        message: this.readErrorMessage(error, "NON_RETRYABLE_PROCESSING_ERROR")
+      };
+    }
+
+    if (error instanceof NotFoundException) {
+      return {
+        retryable: false,
+        reasonCode: "EVENT_NOT_FOUND",
+        message: this.readErrorMessage(error, "EVENT_NOT_FOUND")
+      };
+    }
+
+    if (error instanceof ServiceUnavailableException) {
+      return {
+        retryable: true,
+        reasonCode: "INFRA_UNAVAILABLE",
+        message: this.readErrorMessage(error, "SERVICE_UNAVAILABLE")
+      };
+    }
+
+    return {
+      retryable: true,
+      reasonCode: "TRANSIENT_ERROR",
+      message: this.readErrorMessage(error, "UNCLASSIFIED_ERROR")
+    };
+  }
+
   async markEventFailed(input: {
     eventId: string;
     reasonCode: string;
@@ -410,7 +507,8 @@ export class IngestService {
           update ingest_event_log
           set process_status = 'FAILED',
               error_message = $2,
-              processed_at = now()
+              processed_at = now(),
+              next_retry_at = null
           where event_key = $1
         `,
         [eventId, reasonDetail ?? normalizedReasonCode]
@@ -771,6 +869,21 @@ export class IngestService {
       throw new BadRequestException(`EMPTY_FIELD_${fieldName.toUpperCase()}`);
     }
     return trimmed;
+  }
+
+  private readOptionalString(value: unknown): string | null {
+    if (typeof value !== "string") {
+      return null;
+    }
+    const trimmed = value.trim().toUpperCase();
+    return trimmed || null;
+  }
+
+  private readErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return fallback;
   }
 
   private mapRow(row: IngestEventRow): IngestEventRecord {

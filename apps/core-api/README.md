@@ -50,6 +50,12 @@ Reports are written to:
 - `x-nonce` (replay protection window 10 minutes)
 - `x-idempotency-key` (retained in `ingest_event_log` with 35-day policy)
 
+Feature flag gates:
+
+- `INGEST_WEBHOOK_ENABLED` controls event acceptance endpoint
+- `INGEST_QUEUE_ENABLED` controls BullMQ worker + enqueue behavior
+- `INGEST_REPLAY_ENABLED` controls replay endpoint
+
 Ingest storage behavior:
 
 - accepted events are persisted to `ingest_event_log` in `ops_db`
@@ -69,6 +75,13 @@ Replay flow:
 1. mark failed event to DLQ (`/fail`)
 2. move dead-letter status to `READY`
 3. call replay endpoint (`/v1/ingest/bookings/events/{eventId}/replay`)
+
+Queue runtime:
+
+- broker: Redis + BullMQ
+- retry attempts: max 5
+- retry delays: 30s, 2m, 10m, 30m, 2h
+- non-retryable or max-attempt events: moved to DLQ (`ingest_dead_letter`)
 
 ## Error Envelope
 

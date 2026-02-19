@@ -12,6 +12,8 @@ import {
 import { RawBodyRequest } from "@nestjs/common";
 import { ApiHeader, ApiOperation, ApiParam, ApiTags } from "@nestjs/swagger";
 import { successEnvelope } from "../../common/http/envelope";
+import { IngestFeatureFlagsService } from "./ingest-feature-flags.service";
+import { IngestQueueService } from "./ingest-queue.service";
 import { IngestSecurityService } from "./ingest-security.service";
 import { IngestService } from "./ingest.service";
 
@@ -27,7 +29,9 @@ interface IngestHttpRequest {
 export class IngestController {
   constructor(
     private readonly ingestService: IngestService,
-    private readonly ingestSecurityService: IngestSecurityService
+    private readonly ingestSecurityService: IngestSecurityService,
+    private readonly ingestQueueService: IngestQueueService,
+    private readonly featureFlags: IngestFeatureFlagsService
   ) {}
 
   @Post()
@@ -49,6 +53,8 @@ export class IngestController {
     @Headers() headers: Record<string, unknown>,
     @Req() req: RawBodyRequest<IngestHttpRequest>
   ) {
+    this.featureFlags.assertWebhookEnabled();
+
     const rawBody =
       req.rawBody instanceof Buffer ? req.rawBody : Buffer.from(JSON.stringify(payload ?? {}));
 
@@ -68,10 +74,20 @@ export class IngestController {
       payloadHash,
       signatureVerified
     });
+
+    const queued =
+      idempotentReplay === false
+        ? await this.ingestQueueService.enqueueEvent(record.eventId, {
+            reason: "INGEST_RECEIVED",
+            attemptNumber: 1
+          })
+        : false;
+
     return successEnvelope({
       eventId: record.eventId,
       processStatus: record.processStatus,
-      idempotentReplay
+      idempotentReplay,
+      queued
     });
   }
 
@@ -87,7 +103,18 @@ export class IngestController {
   @ApiOperation({ summary: "Replay failed ingest event" })
   @ApiParam({ name: "eventId", example: "a8f0f4ee-52f2-4e20-a2d9-e7f2f806663e" })
   async replay(@Param("eventId") eventId: string) {
-    return successEnvelope(await this.ingestService.replayEvent(eventId));
+    this.featureFlags.assertReplayEnabled();
+
+    const replayed = await this.ingestService.replayEvent(eventId);
+    const queued = await this.ingestQueueService.enqueueEvent(replayed.eventId, {
+      reason: "REPLAY",
+      attemptNumber: 1
+    });
+
+    return successEnvelope({
+      ...replayed,
+      queued
+    });
   }
 
   @Post(":eventId/fail")
