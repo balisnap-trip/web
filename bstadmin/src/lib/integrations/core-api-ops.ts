@@ -20,6 +20,11 @@ export interface CoreApiResult<T> {
   error: string | null
 }
 
+export interface OpsCutoverActor {
+  id?: string | number | null
+  email?: string | null
+}
+
 export interface CoreApiRequestMetrics {
   windowMinutes: number
   generatedAt: string
@@ -179,6 +184,82 @@ const readCoreApiTimeoutMs = () => {
   return Math.floor(raw)
 }
 
+const readCutoverPercentage = (rawValue: string | undefined, fallback: number) => {
+  const raw = Number(rawValue ?? fallback)
+  if (!Number.isFinite(raw)) {
+    return fallback
+  }
+  if (raw < 0) return 0
+  if (raw > 100) return 100
+  return raw
+}
+
+const readCsvSet = (rawValue: string | undefined) =>
+  new Set(
+    (rawValue || '')
+      .split(',')
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean)
+  )
+
+const normalizeActorId = (value: string | number | null | undefined) => {
+  if (value === null || value === undefined) {
+    return ''
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(Math.floor(value))
+  }
+  if (typeof value === 'string') {
+    return value.trim().toLowerCase()
+  }
+  return ''
+}
+
+const canaryBucket = (seed: string) => {
+  let hash = 0
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0
+  }
+  return hash % 100
+}
+
+const shouldEnableForActor = ({
+  baseEnabled,
+  percentage,
+  actor,
+  canaryUserIds,
+  canaryEmails,
+}: {
+  baseEnabled: boolean
+  percentage: number
+  actor?: OpsCutoverActor
+  canaryUserIds: Set<string>
+  canaryEmails: Set<string>
+}) => {
+  if (!baseEnabled) {
+    return false
+  }
+
+  const actorEmail = normalizeActorId(actor?.email)
+  const actorId = normalizeActorId(actor?.id)
+  if ((actorEmail && canaryEmails.has(actorEmail)) || (actorId && canaryUserIds.has(actorId))) {
+    return true
+  }
+
+  if (percentage >= 100) {
+    return true
+  }
+  if (percentage <= 0) {
+    return false
+  }
+
+  const seed = actorEmail || actorId
+  if (!seed) {
+    return false
+  }
+  return canaryBucket(seed) < percentage
+}
+
 const normalizeError = (error: unknown) =>
   error instanceof Error ? error.message : String(error)
 
@@ -271,8 +352,26 @@ const requestCoreApi = async <T>(
 export const isOpsReadNewModelEnabled = () =>
   readBoolean(process.env.OPS_READ_NEW_MODEL_ENABLED, false)
 
+export const isOpsReadNewModelEnabledForActor = (actor?: OpsCutoverActor) =>
+  shouldEnableForActor({
+    baseEnabled: isOpsReadNewModelEnabled(),
+    percentage: readCutoverPercentage(process.env.OPS_READ_NEW_MODEL_PERCENT, 100),
+    actor,
+    canaryUserIds: readCsvSet(process.env.OPS_READ_NEW_MODEL_CANARY_USER_IDS),
+    canaryEmails: readCsvSet(process.env.OPS_READ_NEW_MODEL_CANARY_EMAILS),
+  })
+
 export const isOpsWriteCoreEnabled = () =>
   readBoolean(process.env.OPS_WRITE_CORE_ENABLED, false)
+
+export const isOpsWriteCoreEnabledForActor = (actor?: OpsCutoverActor) =>
+  shouldEnableForActor({
+    baseEnabled: isOpsWriteCoreEnabled(),
+    percentage: readCutoverPercentage(process.env.OPS_WRITE_CORE_PERCENT, 100),
+    actor,
+    canaryUserIds: readCsvSet(process.env.OPS_WRITE_CORE_CANARY_USER_IDS),
+    canaryEmails: readCsvSet(process.env.OPS_WRITE_CORE_CANARY_EMAILS),
+  })
 
 export const isOpsWriteCoreStrict = () =>
   readBoolean(process.env.OPS_WRITE_CORE_STRICT, false)

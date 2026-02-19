@@ -6,7 +6,7 @@ import { driverSuggestionService } from '@/lib/services/driver-suggestion'
 import { syncBookingStatus } from '@/lib/booking/status'
 import {
   assignCoreOpsBooking,
-  isOpsWriteCoreEnabled,
+  isOpsWriteCoreEnabledForActor,
   isOpsWriteCoreStrict,
   syncCoreOpsBookingStatus,
   unassignCoreOpsBooking,
@@ -72,7 +72,12 @@ export async function POST(
     }
 
     const coreLookupId = booking.bookingRef?.trim() || String(booking.id)
-    if (isOpsWriteCoreEnabled()) {
+    if (
+      isOpsWriteCoreEnabledForActor({
+        id: session.user.id,
+        email: session.user.email,
+      })
+    ) {
       const coreAssignResult = await assignCoreOpsBooking(coreLookupId, Number(driverId))
       if (!coreAssignResult.ok) {
         if (isOpsWriteCoreStrict()) {
@@ -189,7 +194,12 @@ export async function DELETE(
     const oldDriver = booking.driver
 
     const coreLookupId = booking.bookingRef?.trim() || String(booking.id)
-    if (isOpsWriteCoreEnabled()) {
+    if (
+      isOpsWriteCoreEnabledForActor({
+        id: session.user.id,
+        email: session.user.email,
+      })
+    ) {
       const coreUnassignResult = await unassignCoreOpsBooking(coreLookupId)
       if (!coreUnassignResult.ok) {
         if (isOpsWriteCoreStrict()) {

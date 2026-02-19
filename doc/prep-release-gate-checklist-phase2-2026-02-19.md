@@ -164,6 +164,28 @@ Workflow automation:
 1. GitHub schedule + manual workflow:
    1. `.github/workflows/reconciliation-daily-report.yml`
 
+## 4.4 Canary Rollout Controls (WS-12)
+
+`bstadmin` mendukung cutover bertahap berbasis actor untuk jalur read/write:
+
+1. Read cutover:
+   1. `OPS_READ_NEW_MODEL_ENABLED`
+   2. `OPS_READ_NEW_MODEL_PERCENT`
+   3. `OPS_READ_NEW_MODEL_CANARY_USER_IDS`
+   4. `OPS_READ_NEW_MODEL_CANARY_EMAILS`
+2. Write cutover:
+   1. `OPS_WRITE_CORE_ENABLED`
+   2. `OPS_WRITE_CORE_PERCENT`
+   3. `OPS_WRITE_CORE_CANARY_USER_IDS`
+   4. `OPS_WRITE_CORE_CANARY_EMAILS`
+   5. `OPS_WRITE_CORE_STRICT`
+
+Rollback cepat (`G-04`) dapat dilakukan dengan:
+
+1. set `OPS_READ_NEW_MODEL_ENABLED=false`,
+2. set `OPS_WRITE_CORE_ENABLED=false`,
+3. atau set `*_PERCENT=0` sambil mempertahankan allowlist terbatas.
+
 ## 5. Gate Result Template
 
 ```md

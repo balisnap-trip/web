@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import {
   fetchCoreOpsBookings,
-  isOpsReadNewModelEnabled,
+  isOpsReadNewModelEnabledForActor,
 } from '@/lib/integrations/core-api-ops'
 
 /**
@@ -56,7 +56,12 @@ export async function GET(req: NextRequest) {
       fxRate: booking.fxRate ? Number(booking.fxRate) : null,
     }))
 
-    if (!isOpsReadNewModelEnabled()) {
+    if (
+      !isOpsReadNewModelEnabledForActor({
+        id: session.user.id,
+        email: session.user.email,
+      })
+    ) {
       return NextResponse.json({
         bookings: legacyBookings,
         readModelSource: 'legacy',

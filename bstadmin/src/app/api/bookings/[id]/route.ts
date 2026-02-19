@@ -6,8 +6,8 @@ import { syncBookingStatus } from '@/lib/booking/status'
 import {
   assignCoreOpsBooking,
   fetchCoreOpsBookingDetail,
-  isOpsReadNewModelEnabled,
-  isOpsWriteCoreEnabled,
+  isOpsReadNewModelEnabledForActor,
+  isOpsWriteCoreEnabledForActor,
   isOpsWriteCoreStrict,
   patchCoreOpsBooking,
   syncCoreOpsBookingStatus,
@@ -85,7 +85,12 @@ export async function GET(
       otaReceivedAt: createdReceivedAt,
     }
 
-    if (isOpsReadNewModelEnabled()) {
+    if (
+      isOpsReadNewModelEnabledForActor({
+        id: session.user.id,
+        email: session.user.email,
+      })
+    ) {
       const coreLookupId = booking.bookingRef?.trim() || String(booking.id)
       const coreResult = await fetchCoreOpsBookingDetail(coreLookupId)
 
@@ -180,7 +185,12 @@ export async function PATCH(
     }
 
     const coreLookupId = existingBooking.bookingRef?.trim() || String(existingBooking.id)
-    if (isOpsWriteCoreEnabled()) {
+    if (
+      isOpsWriteCoreEnabledForActor({
+        id: session.user.id,
+        email: session.user.email,
+      })
+    ) {
       if (note !== undefined || meetingPoint !== undefined) {
         const corePatchResult = await patchCoreOpsBooking(coreLookupId, {
           note,
