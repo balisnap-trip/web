@@ -186,6 +186,10 @@ Rollback cepat (`G-04`) dapat dilakukan dengan:
 2. set `OPS_WRITE_CORE_ENABLED=false`,
 3. atau set `*_PERCENT=0` sambil mempertahankan allowlist terbatas.
 
+Verifikasi actor-level rollout:
+
+1. endpoint internal `GET /api/ops/cutover-state` di `bstadmin` mengembalikan hasil evaluasi canary untuk user yang sedang login.
+
 ## 5. Gate Result Template
 
 ```md

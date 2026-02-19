@@ -25,6 +25,20 @@ export interface OpsCutoverActor {
   email?: string | null
 }
 
+export interface OpsCutoverDecisionItem {
+  baseEnabled: boolean
+  percentage: number
+  canaryUserIds: number
+  canaryEmails: number
+  enabledForActor: boolean
+}
+
+export interface OpsCutoverDecision {
+  read: OpsCutoverDecisionItem
+  write: OpsCutoverDecisionItem
+  writeStrict: boolean
+}
+
 export interface CoreApiRequestMetrics {
   windowMinutes: number
   generatedAt: string
@@ -260,6 +274,42 @@ const shouldEnableForActor = ({
   return canaryBucket(seed) < percentage
 }
 
+const readReadCutoverConfig = () => ({
+  baseEnabled: isOpsReadNewModelEnabled(),
+  percentage: readCutoverPercentage(process.env.OPS_READ_NEW_MODEL_PERCENT, 100),
+  canaryUserIds: readCsvSet(process.env.OPS_READ_NEW_MODEL_CANARY_USER_IDS),
+  canaryEmails: readCsvSet(process.env.OPS_READ_NEW_MODEL_CANARY_EMAILS),
+})
+
+const readWriteCutoverConfig = () => ({
+  baseEnabled: isOpsWriteCoreEnabled(),
+  percentage: readCutoverPercentage(process.env.OPS_WRITE_CORE_PERCENT, 100),
+  canaryUserIds: readCsvSet(process.env.OPS_WRITE_CORE_CANARY_USER_IDS),
+  canaryEmails: readCsvSet(process.env.OPS_WRITE_CORE_CANARY_EMAILS),
+})
+
+const buildDecisionItem = (
+  config: {
+    baseEnabled: boolean
+    percentage: number
+    canaryUserIds: Set<string>
+    canaryEmails: Set<string>
+  },
+  actor?: OpsCutoverActor
+): OpsCutoverDecisionItem => ({
+  baseEnabled: config.baseEnabled,
+  percentage: config.percentage,
+  canaryUserIds: config.canaryUserIds.size,
+  canaryEmails: config.canaryEmails.size,
+  enabledForActor: shouldEnableForActor({
+    baseEnabled: config.baseEnabled,
+    percentage: config.percentage,
+    actor,
+    canaryUserIds: config.canaryUserIds,
+    canaryEmails: config.canaryEmails,
+  }),
+})
+
 const normalizeError = (error: unknown) =>
   error instanceof Error ? error.message : String(error)
 
@@ -352,29 +402,28 @@ const requestCoreApi = async <T>(
 export const isOpsReadNewModelEnabled = () =>
   readBoolean(process.env.OPS_READ_NEW_MODEL_ENABLED, false)
 
-export const isOpsReadNewModelEnabledForActor = (actor?: OpsCutoverActor) =>
-  shouldEnableForActor({
-    baseEnabled: isOpsReadNewModelEnabled(),
-    percentage: readCutoverPercentage(process.env.OPS_READ_NEW_MODEL_PERCENT, 100),
-    actor,
-    canaryUserIds: readCsvSet(process.env.OPS_READ_NEW_MODEL_CANARY_USER_IDS),
-    canaryEmails: readCsvSet(process.env.OPS_READ_NEW_MODEL_CANARY_EMAILS),
-  })
-
 export const isOpsWriteCoreEnabled = () =>
   readBoolean(process.env.OPS_WRITE_CORE_ENABLED, false)
 
-export const isOpsWriteCoreEnabledForActor = (actor?: OpsCutoverActor) =>
-  shouldEnableForActor({
-    baseEnabled: isOpsWriteCoreEnabled(),
-    percentage: readCutoverPercentage(process.env.OPS_WRITE_CORE_PERCENT, 100),
-    actor,
-    canaryUserIds: readCsvSet(process.env.OPS_WRITE_CORE_CANARY_USER_IDS),
-    canaryEmails: readCsvSet(process.env.OPS_WRITE_CORE_CANARY_EMAILS),
-  })
-
 export const isOpsWriteCoreStrict = () =>
   readBoolean(process.env.OPS_WRITE_CORE_STRICT, false)
+
+export const getOpsCutoverDecisionForActor = (actor?: OpsCutoverActor): OpsCutoverDecision => {
+  const readConfig = readReadCutoverConfig()
+  const writeConfig = readWriteCutoverConfig()
+
+  return {
+    read: buildDecisionItem(readConfig, actor),
+    write: buildDecisionItem(writeConfig, actor),
+    writeStrict: isOpsWriteCoreStrict(),
+  }
+}
+
+export const isOpsReadNewModelEnabledForActor = (actor?: OpsCutoverActor) =>
+  getOpsCutoverDecisionForActor(actor).read.enabledForActor
+
+export const isOpsWriteCoreEnabledForActor = (actor?: OpsCutoverActor) =>
+  getOpsCutoverDecisionForActor(actor).write.enabledForActor
 
 export const fetchCoreOpsBookings = async () =>
   requestCoreApi<CoreOpsBooking[]>('/v1/ops/bookings')

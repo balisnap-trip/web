@@ -131,6 +131,21 @@ interface CoreApiDashboardMetrics {
   }
 }
 
+interface OpsCutoverState {
+  generatedAt: string
+  read: {
+    baseEnabled: boolean
+    percentage: number
+    enabledForActor: boolean
+  }
+  write: {
+    baseEnabled: boolean
+    percentage: number
+    enabledForActor: boolean
+  }
+  writeStrict: boolean
+}
+
 const SOURCE_COLORS: Record<string, string> = {
   GYG: '#4F46E5',
   VIATOR: '#10B981',
@@ -147,6 +162,7 @@ export default function DashboardPage() {
   const [revenueTrend, setRevenueTrend] = useState<RevenueTrend[]>([])
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([])
   const [coreMetrics, setCoreMetrics] = useState<CoreApiDashboardMetrics | null>(null)
+  const [cutoverState, setCutoverState] = useState<OpsCutoverState | null>(null)
   const [loading, setLoading] = useState(true)
   const { notify } = useNotifications()
 
@@ -156,12 +172,14 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [dashboardRes, coreMetricsRes] = await Promise.all([
+      const [dashboardRes, coreMetricsRes, cutoverRes] = await Promise.all([
         fetch('/api/dashboard/stats'),
         fetch('/api/observability/core-api?windowMinutes=15&processingWindowMinutes=60'),
+        fetch('/api/ops/cutover-state'),
       ])
       const data = await dashboardRes.json()
       const coreData = await coreMetricsRes.json().catch(() => null)
+      const cutoverData = await cutoverRes.json().catch(() => null)
       
       if (data.stats) {
         setStats(data.stats)
@@ -177,6 +195,12 @@ export default function DashboardPage() {
         setCoreMetrics(coreData.coreApi)
       } else {
         setCoreMetrics(null)
+      }
+
+      if (cutoverData?.cutover) {
+        setCutoverState(cutoverData.cutover)
+      } else {
+        setCutoverState(null)
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -196,6 +220,37 @@ export default function DashboardPage() {
       </div>
     )
   }
+
+  const cutoverBadge = (() => {
+    if (!cutoverState) {
+      return null
+    }
+
+    if (cutoverState.write.enabledForActor) {
+      return {
+        label:
+          cutoverState.write.percentage >= 100
+            ? 'write-core full'
+            : `write-core ${cutoverState.write.percentage}%`,
+        className: 'bg-emerald-100 text-emerald-700',
+      }
+    }
+
+    if (cutoverState.read.enabledForActor) {
+      return {
+        label:
+          cutoverState.read.percentage >= 100
+            ? 'read-core full'
+            : `read-core ${cutoverState.read.percentage}%`,
+        className: 'bg-blue-100 text-blue-700',
+      }
+    }
+
+    return {
+      label: 'legacy mode',
+      className: 'bg-gray-100 text-gray-600',
+    }
+  })()
 
   return (
     <div className="space-y-6">
@@ -304,7 +359,14 @@ export default function DashboardPage() {
       <Card className="p-4 hover:shadow-md transition-shadow duration-200 border-l-4 border-l-violet-500">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-gray-900">Core API Health</h2>
-          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">15m window</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">15m window</span>
+            {cutoverBadge ? (
+              <span className={`text-xs px-2 py-1 rounded-full font-semibold ${cutoverBadge.className}`}>
+                {cutoverBadge.label}
+              </span>
+            ) : null}
+          </div>
         </div>
 
         {coreMetrics ? (
