@@ -1,3 +1,4 @@
+import { readFileSync } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -55,6 +56,7 @@ function runGate(name, scriptFileName) {
 
   const parsed = parseGateOutput(`${stdout}\n${stderr}`);
   const passed = child.status === 0 && parsed.gateResult === "PASS";
+  const gateReportPreview = parsed.gateReportPath ? readGateReportPreview(parsed.gateReportPath) : null;
 
   return {
     name,
@@ -65,8 +67,23 @@ function runGate(name, scriptFileName) {
     passed,
     gateResult: parsed.gateResult,
     gateReportPath: parsed.gateReportPath,
+    gateReportPreview,
     error: child.error ? child.error.message : null
   };
+}
+
+function readGateReportPreview(reportPath) {
+  try {
+    const raw = readFileSync(reportPath, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      gate: parsed?.gate ?? null,
+      result: parsed?.result ?? null,
+      summary: parsed?.summary ?? null
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function writeReport(report) {
