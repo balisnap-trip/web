@@ -86,6 +86,11 @@ Replay flow:
    - fail-to-DLQ action
    - dead-letter status changes
 
+Audit persistence:
+
+- enabled by default (`AUDIT_PERSISTENCE_ENABLED=true`)
+- file path default: `reports/audit/audit-events.ndjson` (`AUDIT_LOG_PATH`)
+
 Queue runtime:
 
 - broker: Redis + BullMQ
