@@ -123,7 +123,7 @@ The smoke script will:
 3. force event to DLQ
 4. move DLQ status to `READY`
 5. replay the event
-6. validate ingest metrics endpoint
+6. validate ingest metrics endpoints (`queue` + `processing`)
 7. validate audit trail event for fail/status-update/replay flow
 
 ## Ingest Burst Load Test

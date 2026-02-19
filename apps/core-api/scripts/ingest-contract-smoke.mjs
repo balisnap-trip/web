@@ -167,6 +167,15 @@ async function run() {
     throw new Error("Invalid ingest metrics payload");
   }
 
+  const processingMetricsResponse = await requestJson("/v1/ingest/metrics/processing?windowMinutes=60");
+  assertStatus(processingMetricsResponse.status, 200, "Ingest processing metrics endpoint failed");
+  if (
+    !processingMetricsResponse.json?.data?.totals ||
+    !processingMetricsResponse.json?.data?.latenciesMs
+  ) {
+    throw new Error("Invalid ingest processing metrics payload");
+  }
+
   const auditResponse = await requestJson("/v1/audit/events?limit=100");
   assertStatus(auditResponse.status, 200, "Audit endpoint failed");
   const auditEvents = Array.isArray(auditResponse.json?.data)
