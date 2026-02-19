@@ -5,6 +5,7 @@ import { ApiError } from '@/lib/api/errors'
 import { apiSuccess, handleApiError } from '@/lib/api/http'
 import { validateBookingIdInput } from '@/lib/api/validators'
 import { authOptions } from '@/lib/auth'
+import { emitBookingEventToCore } from '@/lib/integrations/core-ingest'
 import { prisma } from '@/lib/db'
 import { getPayableTotal } from '@/lib/utils/booking/compat'
 import { createPayment } from '@/lib/utils/booking/createBooking'
@@ -24,6 +25,14 @@ const getCurrency = (capturePayload: any) => {
   const capture = purchaseUnit?.payments?.captures?.[0]
 
   return capture?.amount?.currency_code ?? purchaseUnit?.amount?.currency_code
+}
+
+const toIsoDate = (value: unknown) => {
+  const parsed = value instanceof Date ? value : value ? new Date(String(value)) : null
+  if (!parsed || Number.isNaN(parsed.getTime())) {
+    return new Date().toISOString().slice(0, 10)
+  }
+  return parsed.toISOString().slice(0, 10)
 }
 
 export async function POST(
@@ -199,6 +208,59 @@ export async function POST(
       payment_status: capturePayload.status,
       payment_ref: capturePayload.id
     })
+
+    const paymentEventResult = await emitBookingEventToCore({
+      idempotencyKey: `direct-payment-captured-${booking.booking_id}-${capturePayload.id || orderId}`,
+      event: {
+        payloadVersion: 'v1',
+        eventType: 'UPDATED',
+        eventTime: new Date().toISOString(),
+        source: 'DIRECT',
+        externalBookingRef:
+          String(booking.booking_ref || '').trim() ||
+          `DIRECT-${booking.booking_id}`,
+        customer: {
+          name: booking.main_contact_name || undefined,
+          email: booking.main_contact_email || undefined,
+          phone: booking.phone_number || undefined,
+        },
+        booking: {
+          tourDate: toIsoDate(booking.booking_date),
+          adult: Number(booking.number_of_adult || 0),
+          child: Number(booking.number_of_child || 0),
+          currency: booking.currency_code || 'USD',
+          totalPrice: Number(booking.total_price || 0),
+          pickupLocation: booking.meeting_point || undefined,
+          meetingPoint: booking.meeting_point || undefined,
+          note: booking.note || undefined,
+        },
+        raw: {
+          providerPayload: {
+            origin: 'balisnap.orders.capture',
+            bookingId: booking.booking_id,
+            bookingRef: booking.booking_ref,
+            orderId,
+            paymentRef: capturePayload.id,
+            paymentStatus: capturePayload.status,
+            capturedAmount,
+            currency: getCurrency(capturePayload),
+            capturePayload,
+          },
+        },
+      },
+    })
+
+    if (!paymentEventResult.disabled && !paymentEventResult.accepted) {
+      console.error(
+        '[api/orders/[orderId]/capture] emit-core-ingest failed',
+        {
+          booking_id: booking.booking_id,
+          status: paymentEventResult.status,
+          attempts: paymentEventResult.attempts,
+          error: paymentEventResult.error,
+        }
+      )
+    }
 
     return apiSuccess(capturePayload, 200)
   } catch (error) {
