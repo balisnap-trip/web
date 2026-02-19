@@ -89,4 +89,27 @@ export class IngestController {
   async replay(@Param("eventId") eventId: string) {
     return successEnvelope(await this.ingestService.replayEvent(eventId));
   }
+
+  @Post(":eventId/fail")
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: "Mark event as failed and move to dead-letter queue" })
+  @ApiParam({ name: "eventId", example: "a8f0f4ee-52f2-4e20-a2d9-e7f2f806663e" })
+  async fail(
+    @Param("eventId") eventId: string,
+    @Body()
+    body: {
+      reasonCode: string;
+      reasonDetail?: string;
+      poisonMessage?: boolean;
+    }
+  ) {
+    return successEnvelope(
+      await this.ingestService.markEventFailed({
+        eventId,
+        reasonCode: body.reasonCode,
+        reasonDetail: body.reasonDetail,
+        poisonMessage: body.poisonMessage
+      })
+    );
+  }
 }

@@ -9,6 +9,14 @@ import { randomUUID } from "crypto";
 import { DatabaseService } from "../database/database.service";
 
 export type IngestProcessStatus = "RECEIVED" | "PROCESSING" | "DONE" | "FAILED";
+export type IngestDeadLetterStatus =
+  | "OPEN"
+  | "READY"
+  | "REPLAYING"
+  | "SUCCEEDED"
+  | "FAILED"
+  | "RESOLVED"
+  | "CLOSED";
 
 export interface IngestEventRecord {
   eventId: string;
@@ -27,6 +35,23 @@ export interface IngestEventRecord {
   nonce: string;
   payloadHash: string;
   errorMessage: string | null;
+}
+
+export interface IngestDeadLetterRecord {
+  deadLetterKey: string;
+  eventId: string;
+  status: IngestDeadLetterStatus;
+  reasonCode: string;
+  reasonDetail: string | null;
+  poisonMessage: boolean;
+  replayCount: number;
+  firstFailedAt: string;
+  lastFailedAt: string;
+  nextReplayAt: string | null;
+  source: string;
+  channelCode: string;
+  externalBookingRef: string;
+  eventType: string;
 }
 
 interface IngestCreateInput {
@@ -63,6 +88,23 @@ interface IngestEventRow {
   payload_hash: string;
   error_message: string | null;
   replay_count: number | null;
+}
+
+interface IngestDeadLetterRow {
+  dead_letter_key: string;
+  event_key: string;
+  status: string;
+  reason_code: string;
+  reason_detail: string | null;
+  poison_message: boolean;
+  replay_count: number;
+  first_failed_at: Date | string;
+  last_failed_at: Date | string;
+  next_replay_at: Date | string | null;
+  source_enum: string;
+  channel_code: string;
+  external_booking_ref: string;
+  event_type: string;
 }
 
 @Injectable()
@@ -281,8 +323,8 @@ export class IngestService {
       }
 
       const deadLetter = deadLetterResult.rows[0];
-      if (!["OPEN", "READY", "FAILED", "REPLAYING"].includes(deadLetter.status)) {
-        throw new ConflictException(`DEAD_LETTER_STATUS_NOT_REPLAYABLE:${deadLetter.status}`);
+      if (deadLetter.status !== "READY") {
+        throw new ConflictException(`DEAD_LETTER_NOT_READY_FOR_REPLAY:${deadLetter.status}`);
       }
 
       await client.query(
@@ -330,6 +372,250 @@ export class IngestService {
     });
 
     return replayed;
+  }
+
+  async markEventFailed(input: {
+    eventId: string;
+    reasonCode: string;
+    reasonDetail?: string;
+    poisonMessage?: boolean;
+  }): Promise<IngestDeadLetterRecord> {
+    const { eventId, reasonCode } = input;
+    const normalizedReasonCode = this.readString(reasonCode, "reasonCode").toUpperCase();
+    const reasonDetail = input.reasonDetail ?? null;
+    const poisonMessage = input.poisonMessage ?? false;
+
+    const result = await this.databaseService.withOpsTransaction(async (client) => {
+      const event = await client.query<IngestEventRow>(
+        `
+          select
+            event_key,
+            source_enum,
+            channel_code,
+            external_booking_ref,
+            event_type
+          from ingest_event_log
+          where event_key = $1
+          for update
+        `,
+        [eventId]
+      );
+
+      if (event.rows.length === 0) {
+        throw new NotFoundException(`Ingest event not found: ${eventId}`);
+      }
+
+      await client.query(
+        `
+          update ingest_event_log
+          set process_status = 'FAILED',
+              error_message = $2,
+              processed_at = now()
+          where event_key = $1
+        `,
+        [eventId, reasonDetail ?? normalizedReasonCode]
+      );
+
+      const existingDeadLetter = await client.query<{
+        dead_letter_key: string;
+        replay_count: number;
+      }>(
+        `
+          select dead_letter_key, replay_count
+          from ingest_dead_letter
+          where event_key = $1
+          order by updated_at desc
+          limit 1
+          for update
+        `,
+        [eventId]
+      );
+
+      if (existingDeadLetter.rows.length === 0) {
+        const deadLetterKey = randomUUID();
+        const inserted = await client.query<{ dead_letter_key: string }>(
+          `
+            insert into ingest_dead_letter (
+              dead_letter_key,
+              event_key,
+              reason_code,
+              reason_detail,
+              poison_message,
+              replay_count,
+              status,
+              first_failed_at,
+              last_failed_at,
+              raw_payload,
+              created_at,
+              updated_at
+            )
+            select
+              $1,
+              i.event_key,
+              $2,
+              $3,
+              $4,
+              0,
+              'OPEN',
+              now(),
+              now(),
+              i.raw_payload,
+              now(),
+              now()
+            from ingest_event_log i
+            where i.event_key = $5
+            returning dead_letter_key
+          `,
+          [deadLetterKey, normalizedReasonCode, reasonDetail, poisonMessage, eventId]
+        );
+
+        return inserted.rows[0].dead_letter_key;
+      }
+
+      const updated = await client.query<{ dead_letter_key: string }>(
+        `
+          update ingest_dead_letter
+          set reason_code = $2,
+              reason_detail = $3,
+              poison_message = $4,
+              status = 'OPEN',
+              last_failed_at = now(),
+              updated_at = now()
+          where dead_letter_key = $1
+          returning dead_letter_key
+        `,
+        [
+          existingDeadLetter.rows[0].dead_letter_key,
+          normalizedReasonCode,
+          reasonDetail,
+          poisonMessage
+        ]
+      );
+
+      return updated.rows[0].dead_letter_key;
+    });
+
+    return this.getDeadLetter(result);
+  }
+
+  async listDeadLetters(input: {
+    status?: IngestDeadLetterStatus;
+    limit?: number;
+  }): Promise<IngestDeadLetterRecord[]> {
+    const limit = Number.isFinite(Number(input.limit)) ? Math.min(Math.max(Number(input.limit), 1), 200) : 50;
+
+    const values: unknown[] = [];
+    let whereClause = "";
+    if (input.status) {
+      values.push(this.ensureDeadLetterStatus(input.status));
+      whereClause = `where d.status = $${values.length}`;
+    }
+    values.push(limit);
+
+    const result = await this.databaseService.opsQuery<IngestDeadLetterRow>(
+      `
+        select
+          d.dead_letter_key,
+          d.event_key,
+          d.status,
+          d.reason_code,
+          d.reason_detail,
+          d.poison_message,
+          d.replay_count,
+          d.first_failed_at,
+          d.last_failed_at,
+          d.next_replay_at,
+          i.source_enum,
+          i.channel_code,
+          i.external_booking_ref,
+          i.event_type
+        from ingest_dead_letter d
+        join ingest_event_log i on i.event_key = d.event_key
+        ${whereClause}
+        order by d.last_failed_at desc
+        limit $${values.length}
+      `,
+      values
+    );
+
+    return result.rows.map((row) => this.mapDeadLetterRow(row));
+  }
+
+  async getDeadLetter(deadLetterKey: string): Promise<IngestDeadLetterRecord> {
+    const result = await this.databaseService.opsQuery<IngestDeadLetterRow>(
+      `
+        select
+          d.dead_letter_key,
+          d.event_key,
+          d.status,
+          d.reason_code,
+          d.reason_detail,
+          d.poison_message,
+          d.replay_count,
+          d.first_failed_at,
+          d.last_failed_at,
+          d.next_replay_at,
+          i.source_enum,
+          i.channel_code,
+          i.external_booking_ref,
+          i.event_type
+        from ingest_dead_letter d
+        join ingest_event_log i on i.event_key = d.event_key
+        where d.dead_letter_key = $1
+        limit 1
+      `,
+      [deadLetterKey]
+    );
+
+    if (result.rows.length === 0) {
+      throw new NotFoundException(`Dead letter not found: ${deadLetterKey}`);
+    }
+    return this.mapDeadLetterRow(result.rows[0]);
+  }
+
+  async updateDeadLetterStatus(input: {
+    deadLetterKey: string;
+    toStatus: IngestDeadLetterStatus;
+  }): Promise<IngestDeadLetterRecord> {
+    const targetStatus = this.ensureDeadLetterStatus(input.toStatus);
+    const updated = await this.databaseService.withOpsTransaction(async (client) => {
+      const current = await client.query<{ status: string }>(
+        `
+          select status
+          from ingest_dead_letter
+          where dead_letter_key = $1
+          for update
+        `,
+        [input.deadLetterKey]
+      );
+
+      if (current.rows.length === 0) {
+        throw new NotFoundException(`Dead letter not found: ${input.deadLetterKey}`);
+      }
+
+      const fromStatus = current.rows[0].status as IngestDeadLetterStatus;
+      if (!this.canTransitionDeadLetterStatus(fromStatus, targetStatus)) {
+        throw new ConflictException(`INVALID_DEAD_LETTER_TRANSITION:${fromStatus}->${targetStatus}`);
+      }
+
+      await client.query(
+        `
+          update ingest_dead_letter
+          set status = $2,
+              updated_at = now(),
+              next_replay_at = case
+                when $2 = 'READY' then now()
+                else next_replay_at
+              end
+          where dead_letter_key = $1
+        `,
+        [input.deadLetterKey, targetStatus]
+      );
+
+      return input.deadLetterKey;
+    });
+
+    return this.getDeadLetter(updated);
   }
 
   private async findByIdempotency(idempotencyKey: string): Promise<IngestEventRecord | null> {
@@ -513,6 +799,73 @@ export class IngestService {
       return rawStatus;
     }
     return "FAILED";
+  }
+
+  private mapDeadLetterRow(row: IngestDeadLetterRow): IngestDeadLetterRecord {
+    return {
+      deadLetterKey: row.dead_letter_key,
+      eventId: row.event_key,
+      status: this.mapDeadLetterStatus(row.status),
+      reasonCode: row.reason_code,
+      reasonDetail: row.reason_detail,
+      poisonMessage: row.poison_message,
+      replayCount: Number(row.replay_count),
+      firstFailedAt: new Date(row.first_failed_at).toISOString(),
+      lastFailedAt: new Date(row.last_failed_at).toISOString(),
+      nextReplayAt: row.next_replay_at ? new Date(row.next_replay_at).toISOString() : null,
+      source: row.source_enum,
+      channelCode: row.channel_code,
+      externalBookingRef: row.external_booking_ref,
+      eventType: row.event_type
+    };
+  }
+
+  private mapDeadLetterStatus(rawStatus: string): IngestDeadLetterStatus {
+    if (
+      rawStatus === "OPEN" ||
+      rawStatus === "READY" ||
+      rawStatus === "REPLAYING" ||
+      rawStatus === "SUCCEEDED" ||
+      rawStatus === "FAILED" ||
+      rawStatus === "RESOLVED" ||
+      rawStatus === "CLOSED"
+    ) {
+      return rawStatus;
+    }
+    return "OPEN";
+  }
+
+  private canTransitionDeadLetterStatus(
+    fromStatus: IngestDeadLetterStatus,
+    toStatus: IngestDeadLetterStatus
+  ): boolean {
+    const transitions: Record<IngestDeadLetterStatus, IngestDeadLetterStatus[]> = {
+      OPEN: ["READY", "RESOLVED", "CLOSED"],
+      READY: ["REPLAYING"],
+      REPLAYING: ["SUCCEEDED", "FAILED", "READY"],
+      FAILED: ["READY", "RESOLVED", "CLOSED"],
+      SUCCEEDED: ["CLOSED"],
+      RESOLVED: ["CLOSED"],
+      CLOSED: []
+    };
+
+    return transitions[fromStatus].includes(toStatus);
+  }
+
+  private ensureDeadLetterStatus(status: string): IngestDeadLetterStatus {
+    const normalized = status.trim().toUpperCase();
+    if (
+      normalized === "OPEN" ||
+      normalized === "READY" ||
+      normalized === "REPLAYING" ||
+      normalized === "SUCCEEDED" ||
+      normalized === "FAILED" ||
+      normalized === "RESOLVED" ||
+      normalized === "CLOSED"
+    ) {
+      return normalized;
+    }
+    throw new BadRequestException(`INVALID_DEAD_LETTER_STATUS:${status}`);
   }
 
   private rethrowIfIngestSchemaMissing(error: unknown) {

@@ -57,6 +57,19 @@ Ingest storage behavior:
 - idempotency uses `idempotency_key` + secondary dedup key
 - replay endpoint requires event to exist in `ingest_dead_letter`
 
+Dead-letter operations:
+
+- `GET /v1/ingest/dead-letter`
+- `GET /v1/ingest/dead-letter/{deadLetterKey}`
+- `PATCH /v1/ingest/dead-letter/{deadLetterKey}/status/{status}`
+- `POST /v1/ingest/bookings/events/{eventId}/fail` (move event to DLQ)
+
+Replay flow:
+
+1. mark failed event to DLQ (`/fail`)
+2. move dead-letter status to `READY`
+3. call replay endpoint (`/v1/ingest/bookings/events/{eventId}/replay`)
+
 ## Error Envelope
 
 HTTP errors are wrapped with:
