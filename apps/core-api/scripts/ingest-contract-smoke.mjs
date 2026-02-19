@@ -42,9 +42,10 @@ async function requestJson(path, options = {}) {
   };
 }
 
-function assertStatus(actual, expected, message) {
+function assertStatus(actual, expected, message, payload = null) {
   if (actual !== expected) {
-    throw new Error(`${message}. expected=${expected} actual=${actual}`);
+    const suffix = payload ? ` body=${JSON.stringify(payload)}` : "";
+    throw new Error(`${message}. expected=${expected} actual=${actual}${suffix}`);
   }
 }
 
@@ -116,7 +117,11 @@ async function run() {
     },
     body
   });
-  assertStatus(ingest.status, 202, "Ingest request failed");
+  if (ingest.status !== 202) {
+    throw new Error(
+      `Ingest request failed. expected=202 actual=${ingest.status} body=${JSON.stringify(ingest.json)}`
+    );
+  }
 
   const eventId = ingest.json?.data?.eventId;
   if (!eventId) {
@@ -124,7 +129,7 @@ async function run() {
   }
 
   const status1 = await requestJson(`/v1/ingest/bookings/events/${eventId}`);
-  assertStatus(status1.status, 200, "Event status lookup failed");
+  assertStatus(status1.status, 200, "Event status lookup failed", status1.json);
 
   const failResponse = await requestJson(`/v1/ingest/bookings/events/${eventId}/fail`, {
     method: "POST",
@@ -139,7 +144,7 @@ async function run() {
       poisonMessage: false
     })
   });
-  assertStatus(failResponse.status, 202, "Fail-to-DLQ endpoint failed");
+  assertStatus(failResponse.status, 202, "Fail-to-DLQ endpoint failed", failResponse.json);
 
   const deadLetterKey = failResponse.json?.data?.deadLetterKey;
   if (!deadLetterKey) {
@@ -156,7 +161,12 @@ async function run() {
       }
     }
   );
-  assertStatus(readyResponse.status, 200, "Dead-letter status update to READY failed");
+  assertStatus(
+    readyResponse.status,
+    200,
+    "Dead-letter status update to READY failed",
+    readyResponse.json
+  );
 
   const replayResponse = await requestJson(`/v1/ingest/bookings/events/${eventId}/replay`, {
     method: "POST",
@@ -165,17 +175,17 @@ async function run() {
       "x-actor": actor
     }
   });
-  assertStatus(replayResponse.status, 202, "Replay endpoint failed");
+  assertStatus(replayResponse.status, 202, "Replay endpoint failed", replayResponse.json);
 
   const deadLetterList = await requestJson("/v1/ingest/dead-letter?status=READY&limit=20", {
     headers: adminHeaders
   });
-  assertStatus(deadLetterList.status, 200, "Dead-letter list endpoint failed");
+  assertStatus(deadLetterList.status, 200, "Dead-letter list endpoint failed", deadLetterList.json);
 
   const metricsResponse = await requestJson("/v1/ingest/metrics/queue", {
     headers: adminHeaders
   });
-  assertStatus(metricsResponse.status, 200, "Ingest metrics endpoint failed");
+  assertStatus(metricsResponse.status, 200, "Ingest metrics endpoint failed", metricsResponse.json);
   if (!metricsResponse.json?.data?.queue || !metricsResponse.json?.data?.deadLetter) {
     throw new Error("Invalid ingest metrics payload");
   }
@@ -186,7 +196,12 @@ async function run() {
       headers: adminHeaders
     }
   );
-  assertStatus(processingMetricsResponse.status, 200, "Ingest processing metrics endpoint failed");
+  assertStatus(
+    processingMetricsResponse.status,
+    200,
+    "Ingest processing metrics endpoint failed",
+    processingMetricsResponse.json
+  );
   if (
     !processingMetricsResponse.json?.data?.totals ||
     !processingMetricsResponse.json?.data?.latenciesMs
@@ -197,7 +212,7 @@ async function run() {
   const auditResponse = await requestJson("/v1/audit/events?limit=100", {
     headers: adminHeaders
   });
-  assertStatus(auditResponse.status, 200, "Audit endpoint failed");
+  assertStatus(auditResponse.status, 200, "Audit endpoint failed", auditResponse.json);
   const auditEvents = Array.isArray(auditResponse.json?.data)
     ? auditResponse.json.data.filter((event) => event?.actor === actor)
     : [];

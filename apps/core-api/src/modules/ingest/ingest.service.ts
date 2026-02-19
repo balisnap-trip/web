@@ -878,12 +878,12 @@ export class IngestService {
           set status = $2,
               updated_at = now(),
               next_replay_at = case
-                when $2 = 'READY' then now()
+                when $3 = 'READY' then now()
                 else next_replay_at
               end
           where dead_letter_key = $1
         `,
-        [input.deadLetterKey, targetStatus]
+        [input.deadLetterKey, targetStatus, targetStatus]
       );
 
       return input.deadLetterKey;

@@ -21,6 +21,9 @@ const emitterStagingEnvPath =
   readArgValue(argv, "--emitter-staging-env-path") || "/home/bonk/stagging-bst/current/balisnap/.env";
 
 const expectWebEmitDisabled = readBoolean(process.env.EXPECT_WEB_EMIT_DISABLED, true);
+const expectIngestQueueEnabled = readBoolean(process.env.EXPECT_INGEST_QUEUE_ENABLED, true);
+const expectIngestWebhookEnabled = readBoolean(process.env.EXPECT_INGEST_WEBHOOK_ENABLED, true);
+const expectIngestReplayEnabled = readBoolean(process.env.EXPECT_INGEST_REPLAY_ENABLED, true);
 const requireBackupEvidence = readBoolean(process.env.INGEST_ENV_REQUIRE_BACKUP_EVIDENCE, true);
 
 const __filename = fileURLToPath(import.meta.url);
@@ -184,13 +187,13 @@ function readLatestBackup(configInput, remotePath) {
   const remoteDir = path.posix.dirname(remotePath);
   const baseName = path.posix.basename(remotePath);
   const qRemoteDir = shQuote(remoteDir);
-  const qPattern = shQuote(`${baseName}.bak.*`);
+  const qBaseName = shQuote(baseName);
   const output = runCapture(
     "ssh",
     sshArgs(
       configInput,
       `set -eu
-latest=$(cd ${qRemoteDir} && ls -1t ${qPattern} 2>/dev/null | head -n 1 || true)
+latest=$(cd ${qRemoteDir} && ls -1t ${qBaseName}.bak.* 2>/dev/null | head -n 1 || true)
 printf "%s" "$latest"`
     )
   );
@@ -232,6 +235,27 @@ function buildChecks(failures, context) {
       detail: expectWebEmitDisabled
         ? "expected false on emitter env"
         : "check skipped (EXPECT_WEB_EMIT_DISABLED=false)"
+    },
+    {
+      name: "ingest_queue_enabled_receiver",
+      passed: expectIngestQueueEnabled ? context.ingestQueueEnabled : true,
+      detail: expectIngestQueueEnabled
+        ? "expected true on receiver env"
+        : "check skipped (EXPECT_INGEST_QUEUE_ENABLED=false)"
+    },
+    {
+      name: "ingest_webhook_enabled_receiver",
+      passed: expectIngestWebhookEnabled ? context.ingestWebhookEnabled : true,
+      detail: expectIngestWebhookEnabled
+        ? "expected true on receiver env"
+        : "check skipped (EXPECT_INGEST_WEBHOOK_ENABLED=false)"
+    },
+    {
+      name: "ingest_replay_enabled_receiver",
+      passed: expectIngestReplayEnabled ? context.ingestReplayEnabled : true,
+      detail: expectIngestReplayEnabled
+        ? "expected true on receiver env"
+        : "check skipped (EXPECT_INGEST_REPLAY_ENABLED=false)"
     },
     {
       name: "backup_evidence_available",
@@ -330,6 +354,36 @@ async function runGate() {
     failures.push("WEB_EMIT_BOOKING_EVENT_ENABLED expected false on emitter env files");
   }
 
+  const receiverIngestQueueRaw = (receiverEnv.INGEST_QUEUE_ENABLED || "").trim().toLowerCase();
+  const ingestQueueEnabled =
+    receiverIngestQueueRaw === "true" ||
+    receiverIngestQueueRaw === "1" ||
+    receiverIngestQueueRaw === "yes" ||
+    receiverIngestQueueRaw === "on";
+  if (expectIngestQueueEnabled && !ingestQueueEnabled) {
+    failures.push("INGEST_QUEUE_ENABLED expected true on receiver env file");
+  }
+
+  const receiverIngestWebhookRaw = (receiverEnv.INGEST_WEBHOOK_ENABLED || "").trim().toLowerCase();
+  const ingestWebhookEnabled =
+    receiverIngestWebhookRaw === "true" ||
+    receiverIngestWebhookRaw === "1" ||
+    receiverIngestWebhookRaw === "yes" ||
+    receiverIngestWebhookRaw === "on";
+  if (expectIngestWebhookEnabled && !ingestWebhookEnabled) {
+    failures.push("INGEST_WEBHOOK_ENABLED expected true on receiver env file");
+  }
+
+  const receiverIngestReplayRaw = (receiverEnv.INGEST_REPLAY_ENABLED || "").trim().toLowerCase();
+  const ingestReplayEnabled =
+    receiverIngestReplayRaw === "true" ||
+    receiverIngestReplayRaw === "1" ||
+    receiverIngestReplayRaw === "yes" ||
+    receiverIngestReplayRaw === "on";
+  if (expectIngestReplayEnabled && !ingestReplayEnabled) {
+    failures.push("INGEST_REPLAY_ENABLED expected true on receiver env file");
+  }
+
   const backups = {
     receiver: {
       latest: readLatestBackup(config, receiverEnvPath)
@@ -352,6 +406,9 @@ async function runGate() {
     tokenParity,
     secretParity,
     webEmitDisabled,
+    ingestQueueEnabled,
+    ingestWebhookEnabled,
+    ingestReplayEnabled,
     backupEvidencePresent
   });
 
@@ -370,6 +427,9 @@ async function runGate() {
     },
     config: {
       expectWebEmitDisabled,
+      expectIngestQueueEnabled,
+      expectIngestWebhookEnabled,
+      expectIngestReplayEnabled,
       requireBackupEvidence
     },
     parity: {

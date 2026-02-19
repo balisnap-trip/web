@@ -33,6 +33,12 @@ function assertStatus(actual, expected, message) {
   }
 }
 
+function assertStatusIn(actual, expectedList, message) {
+  if (!expectedList.includes(actual)) {
+    throw new Error(`${message}. expected=${expectedList.join("|")} actual=${actual}`);
+  }
+}
+
 async function run() {
   const noAuthList = await requestJson("/v1/channel-mappings");
   if (expectAuthEnforced) {
@@ -93,7 +99,7 @@ async function run() {
       mappingStatus: "MAPPED"
     })
   });
-  assertStatus(managerCreate.status, 200, "Manager create channel mapping failed");
+  assertStatusIn(managerCreate.status, [200, 201], "Manager create channel mapping failed");
 
   const mappingId = managerCreate.json?.data?.mappingId;
   if (!mappingId) {

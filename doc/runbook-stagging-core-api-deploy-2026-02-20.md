@@ -54,6 +54,8 @@ Deploy sekaligus install dependency + build:
 pnpm deploy:core-api-prod:build
 ```
 
+Catatan: command ini menjalankan build terfokus `@bst/core-api` pada release target (`core-api-prod`), bukan full workspace.
+
 Lihat current release dan daftar release:
 
 ```powershell
@@ -64,6 +66,19 @@ Rollback manual:
 
 ```powershell
 pnpm deploy:core-api-prod:rollback -- --release-id <RELEASE_ID>
+```
+
+Kontrol runtime core API:
+
+```powershell
+pnpm deploy:core-api-prod:status
+pnpm deploy:core-api-prod:start
+pnpm deploy:core-api-prod:stop
+pnpm deploy:core-api-prod:restart
+pnpm deploy:core-api-prod:redis:status
+pnpm deploy:core-api-prod:redis:start
+pnpm deploy:core-api-prod:redis:stop
+pnpm deploy:core-api-prod:redis:restart
 ```
 
 ## Catatan Operasional
@@ -94,8 +109,13 @@ pnpm deploy:core-api-prod:rollback -- --release-id <RELEASE_ID>
 
 ## Verifikasi Lanjutan Wajib
 
-1. Restart atau reload process yang membaca `.env` (core-api dan balisnap target).
-2. Jalankan gate preflight runtime env:
+1. Restart atau reload process yang membaca `.env` (core-api dan balisnap target):
+   1. `pnpm deploy:core-api-prod:redis:start`.
+   2. `pnpm deploy:core-api-prod:redis:status`.
+   3. `pnpm deploy:core-api-prod:restart`.
+2. Verifikasi status runtime core-api:
+   1. `pnpm deploy:core-api-prod:status`.
+3. Jalankan gate preflight runtime env:
    1. `pnpm gate:ingest-env-baseline`.
-3. Jalankan smoke test endpoint ingest dan admin token auth setelah reload.
-4. Pastikan `WEB_EMIT_BOOKING_EVENT_ENABLED=false` sampai gate Batch F dinyatakan `PASS`.
+4. Jalankan smoke test endpoint ingest dan admin token auth setelah reload.
+5. Pastikan `WEB_EMIT_BOOKING_EVENT_ENABLED=false` sampai gate Batch F dinyatakan `PASS`.

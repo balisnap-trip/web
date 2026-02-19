@@ -18,6 +18,7 @@ const args = process.argv.slice(2);
 const config = readConfig(args);
 const runInstall = args.includes("--run-install");
 const runBuild = args.includes("--run-build");
+const buildCoreApiOnly = args.includes("--build-core-api-only");
 
 let keepReleases = 5;
 const keepIndex = args.findIndex((token) => token === "--keep-releases");
@@ -133,8 +134,13 @@ if (runInstall) {
 }
 
 if (runBuild) {
-  console.log("==> Running workspace build on remote release");
-  run("ssh", sshArgs(config, `set -eu; cd ${qReleaseDir}; pnpm build`));
+  if (buildCoreApiOnly) {
+    console.log("==> Running core-api build on remote release");
+    run("ssh", sshArgs(config, `set -eu; cd ${qReleaseDir}; pnpm --filter @bst/core-api build`));
+  } else {
+    console.log("==> Running workspace build on remote release");
+    run("ssh", sshArgs(config, `set -eu; cd ${qReleaseDir}; pnpm build`));
+  }
 }
 
 console.log("==> Activating release");

@@ -156,11 +156,18 @@ Checklist lulus `F-00`:
    2. `INGEST_REDIS_URL`,
    3. `CORE_API_ADMIN_TOKEN`,
    4. `INGEST_SERVICE_TOKEN`,
-   5. `INGEST_SERVICE_SECRET`.
-6. parity token/secret wajib sama antara receiver (`core-api`) dan emitter (`balisnap`):
+   5. `INGEST_SERVICE_SECRET`,
+   6. `INGEST_QUEUE_ENABLED`,
+   7. `INGEST_WEBHOOK_ENABLED`,
+   8. `INGEST_REPLAY_ENABLED`.
+6. flag berikut pada receiver wajib bernilai `true` saat batch F aktivasi:
+   1. `INGEST_QUEUE_ENABLED`,
+   2. `INGEST_WEBHOOK_ENABLED`,
+   3. `INGEST_REPLAY_ENABLED`.
+7. parity token/secret wajib sama antara receiver (`core-api`) dan emitter (`balisnap`):
    1. `/home/bonk/balisnaptrip/.env`,
    2. `/home/bonk/stagging-bst/current/balisnap/.env`.
-7. evidence minimum:
+8. evidence minimum:
    1. timestamp verifikasi,
    2. path env yang diverifikasi,
    3. bukti backup `.env` sebelum perubahan.

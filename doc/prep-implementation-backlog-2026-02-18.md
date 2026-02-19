@@ -271,11 +271,11 @@ Status: aktif
 | Bootstrap env core-api prod (`REDIS_URL`, `INGEST_REDIS_URL`, `CORE_API_ADMIN_TOKEN`, `INGEST_SERVICE_TOKEN`, `INGEST_SERVICE_SECRET`) | `DONE` | runtime `.env` di `/home/bonk/backend/core-api-prod/shared/.env` |
 | Sync `INGEST_SERVICE_TOKEN` + `INGEST_SERVICE_SECRET` ke emitter env | `DONE` | `/home/bonk/balisnaptrip/.env` + `/home/bonk/stagging-bst/current/balisnap/.env` |
 | Otomasi gate `F-00` runtime env baseline | `DONE` | `pnpm gate:ingest-env-baseline` + report `reports/gates/ingest-env-baseline/*` |
-| Smoke test ingest handshake setelah reload process | `TODO` | wajib dicatat di release gate Batch F (`F-00`/`F-01`) |
+| Smoke test ingest handshake setelah reload process | `DONE` | `SMOKE_TEST_RESULT=PASS` + `ADMIN_AUTH_SMOKE_RESULT=PASS` pada runtime `/home/bonk/backend/core-api-prod/current` |
+| Gate Batch F (`F-01/F-02/F-03`) ingest release | `DONE` | `/home/bonk/backend/core-api-prod/releases/20260219T192910Z/reports/gates/ingest-release/2026-02-19T19-52-42-450Z.json` |
 
 ## 12. Immediate Next Action
 
-1. Jalankan `pnpm gate:ingest-env-baseline` sampai `PASS`.
-2. Verifikasi reload process untuk runtime yang membaca env terbaru.
-3. Jalankan smoke test ingest (signature + auth) dan simpan evidence.
-4. Lanjutkan gate otomatis `gate:ingest-release` jika preflight env `PASS`.
+1. Jalankan `pnpm --filter @bst/core-api quality:phase2` pada runtime release aktif untuk melengkapi evidence batch.
+2. Jalankan `pnpm --filter @bst/core-api release:evidence` setelah quality check `PASS`.
+3. Kumpulkan evidence JSON/MD dan lanjutkan sign-off matrix (Tech Lead, Backend Lead, DevOps, Owner).

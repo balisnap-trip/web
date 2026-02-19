@@ -52,10 +52,17 @@ Environment penting:
 ## 3.1 Preflight Wajib Sebelum Gate
 
 1. Jalankan `pnpm gate:ingest-env-baseline` sampai hasil `INGEST_ENV_BASELINE_RESULT=PASS`.
-2. Verifikasi semua key env penting tidak kosong.
-3. Verifikasi `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` di emitter (`balisnap`) sama dengan penerima (`core-api`).
-4. Verifikasi `WEB_EMIT_BOOKING_EVENT_ENABLED=false` jika belum masuk window aktivasi bertahap.
-5. Setelah update env, lakukan restart/reload process sebelum menjalankan gate.
+2. Pastikan flag receiver berikut bernilai `true` untuk batch F activation:
+   1. `INGEST_QUEUE_ENABLED`,
+   2. `INGEST_WEBHOOK_ENABLED`,
+   3. `INGEST_REPLAY_ENABLED`.
+3. Pastikan Redis runtime aktif:
+   1. `pnpm deploy:core-api-prod:redis:start`,
+   2. `pnpm deploy:core-api-prod:redis:status`.
+4. Verifikasi semua key env penting tidak kosong.
+5. Verifikasi `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` di emitter (`balisnap`) sama dengan penerima (`core-api`).
+6. Verifikasi `WEB_EMIT_BOOKING_EVENT_ENABLED=false` jika belum masuk window aktivasi bertahap.
+7. Setelah update env, lakukan restart/reload process sebelum menjalankan gate.
 
 ## 4. Jalur Eksekusi CI (Manual Dispatch)
 

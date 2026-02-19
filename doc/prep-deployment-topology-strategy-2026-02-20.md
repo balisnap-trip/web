@@ -40,9 +40,17 @@ Status: aktif
    4. `pnpm deploy:stagging-bst:rollback -- --release-id <RELEASE_ID>`
 2. Core API production:
    1. `pnpm deploy:core-api-prod`
-   2. `pnpm deploy:core-api-prod:build`
+   2. `pnpm deploy:core-api-prod:build` (install all workspace deps + build scoped `@bst/core-api`)
    3. `pnpm deploy:core-api-prod:list`
    4. `pnpm deploy:core-api-prod:rollback -- --release-id <RELEASE_ID>`
+   5. `pnpm deploy:core-api-prod:status`
+   6. `pnpm deploy:core-api-prod:start`
+   7. `pnpm deploy:core-api-prod:stop`
+   8. `pnpm deploy:core-api-prod:restart`
+   9. `pnpm deploy:core-api-prod:redis:status`
+   10. `pnpm deploy:core-api-prod:redis:start`
+   11. `pnpm deploy:core-api-prod:redis:stop`
+   12. `pnpm deploy:core-api-prod:redis:restart`
 
 ## 5. Kebijakan `.env`
 
@@ -57,6 +65,8 @@ Status: aktif
    5. `CORE_API_ADMIN_TOKEN`
    6. `INGEST_SERVICE_TOKEN`
    7. `INGEST_SERVICE_SECRET`
+   8. `INGEST_WEBHOOK_ENABLED`
+   9. `INGEST_REPLAY_ENABLED`
 
 ## 6. Cutover Guardrail
 
