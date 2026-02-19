@@ -141,6 +141,29 @@ Load report JSON akan ditulis ke:
 
 - `reports/load/ingest/{timestamp}.json`
 
+## Ingest DLQ Growth Gate (F-03)
+
+Run automated gate check for `DLQ growth <= 20 event/jam` using live metrics endpoint:
+
+```bash
+set CORE_API_BASE_URL=http://localhost:4000
+set GATE_WINDOW_MINUTES=120
+set GATE_SAMPLE_INTERVAL_SECONDS=60
+set GATE_DLQ_MAX_GROWTH_PER_HOUR=20
+pnpm --filter @bst/core-api gate:ingest-dlq-growth
+```
+
+Optional thresholds:
+
+- `GATE_MAX_FETCH_ERRORS` (default `0`)
+- `GATE_MAX_QUEUE_WAITING` (optional)
+- `GATE_MAX_QUEUE_FAILED` (optional)
+- `GATE_DLQ_INCLUDE_STATUSES` (default `OPEN,READY,REPLAYING,FAILED`)
+
+Gate report JSON akan ditulis ke:
+
+- `reports/gates/ingest-dlq-growth/{timestamp}.json`
+
 ## Error Envelope
 
 HTTP errors are wrapped with:
