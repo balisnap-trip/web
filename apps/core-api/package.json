@@ -12,6 +12,7 @@
     "load:ingest-burst": "node scripts/ingest-burst-load.mjs",
     "gate:ingest-processing": "node scripts/ingest-processing-gate.mjs",
     "gate:ingest-dlq-growth": "node scripts/ingest-dlq-growth-gate.mjs",
+    "gate:ingest-release": "node scripts/ingest-release-gate-runner.mjs",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "echo \"No tests yet\""

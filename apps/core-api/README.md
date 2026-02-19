@@ -192,6 +192,24 @@ Gate report JSON akan ditulis ke:
 
 - `reports/gates/ingest-processing/{timestamp}.json`
 
+## Ingest Release Gate Runner
+
+Run combined gate execution for ingestion release evidence:
+
+```bash
+set CORE_API_BASE_URL=http://localhost:4000
+pnpm --filter @bst/core-api gate:ingest-release
+```
+
+Gate toggles:
+
+- `RUN_GATE_PROCESSING` (default `true`)
+- `RUN_GATE_DLQ_GROWTH` (default `true`)
+
+Combined report JSON akan ditulis ke:
+
+- `reports/gates/ingest-release/{timestamp}.json`
+
 ## Error Envelope
 
 HTTP errors are wrapped with:
