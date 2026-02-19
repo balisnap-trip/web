@@ -1,5 +1,5 @@
 import { readFileSync } from "fs";
-import { readdir } from "fs/promises";
+import { mkdir, readdir, writeFile } from "fs/promises";
 import { createHash, randomUUID } from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -22,9 +22,14 @@ const SCRIPT_ORDER = [
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const phase2Dir = path.resolve(__dirname, "../../../doc/sql-templates/phase2");
+const reconRootDir = path.resolve(__dirname, "../../../reports/recon");
 
 function sha256Hex(input) {
   return createHash("sha256").update(input).digest("hex");
+}
+
+function nowTimestampForFile() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
 function toNumberOrNull(raw) {
@@ -75,6 +80,66 @@ async function getScriptList() {
   }
 
   return SCRIPT_ORDER.filter((item) => selected.includes(item));
+}
+
+function createMarkdownReport(report, jsonReportRelativePath) {
+  const lines = [];
+  lines.push(`# Phase-2 Migration Report`);
+  lines.push("");
+  lines.push(`- batch: ${report.batchCode}`);
+  lines.push(`- timestamp: ${report.timestamp}`);
+  lines.push(`- mode: ${report.mode}`);
+  lines.push(`- result: ${report.result}`);
+  lines.push(`- json report: ${jsonReportRelativePath}`);
+  lines.push("");
+  lines.push(`## Precheck`);
+  lines.push("");
+  if (report.precheck) {
+    lines.push(`- long transactions: ${report.precheck.longTxnCount}`);
+    lines.push(`- blocking locks: ${report.precheck.blockingPairCount}`);
+    lines.push(`- storage status: ${report.precheck.storageStatus}`);
+    lines.push(`- free percent: ${report.precheck.freePercent ?? "n/a"}`);
+  } else {
+    lines.push(`- skipped`);
+  }
+  lines.push("");
+  lines.push("## Scripts");
+  lines.push("");
+
+  for (const item of report.scripts) {
+    lines.push(
+      `- ${item.scriptName}: ${item.status} (checksum=${item.checksum}, durationMs=${item.durationMs})`
+    );
+    if (item.errorMessage) {
+      lines.push(`  error: ${item.errorMessage}`);
+    }
+  }
+  lines.push("");
+  if (report.errorMessage) {
+    lines.push("## Error");
+    lines.push("");
+    lines.push(`- ${report.errorMessage}`);
+    lines.push("");
+  }
+
+  return lines.join("\n");
+}
+
+async function writeReconReport(report) {
+  const batchDir = path.join(reconRootDir, report.batchCode);
+  await mkdir(batchDir, { recursive: true });
+
+  const jsonPath = path.join(batchDir, `${report.timestamp}.json`);
+  const markdownPath = path.join(batchDir, `${report.timestamp}.md`);
+  const jsonRelative = path.relative(path.resolve(__dirname, "../../../"), jsonPath).replace(/\\/g, "/");
+
+  await writeFile(jsonPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+  await writeFile(markdownPath, `${createMarkdownReport(report, jsonRelative)}\n`, "utf8");
+
+  return {
+    jsonPath,
+    markdownPath
+  };
 }
 
 async function hasMigrationRunLog(client) {
@@ -220,9 +285,34 @@ function printDryRunDetails(scripts) {
 async function run() {
   const scripts = await getScriptList();
   const dryRun = process.env.PHASE2_DRY_RUN === "true";
+  const timestamp = nowTimestampForFile();
+  const batchCode = process.env.PHASE2_BATCH_CODE || "phase2";
+
+  const report = {
+    batchCode,
+    timestamp,
+    mode: dryRun ? "dry-run" : "execute",
+    result: "PASS",
+    precheck: null,
+    scripts: [],
+    errorMessage: null
+  };
 
   if (dryRun) {
     printDryRunDetails(scripts);
+    for (const scriptName of scripts) {
+      const loaded = readSql(scriptName);
+      report.scripts.push({
+        scriptName: loaded.scriptName,
+        checksum: loaded.checksum,
+        status: "DRY_RUN",
+        durationMs: 0,
+        errorMessage: null
+      });
+    }
+    const paths = await writeReconReport(report);
+    console.log(`REPORT_JSON=${paths.jsonPath}`);
+    console.log(`REPORT_MD=${paths.markdownPath}`);
     return;
   }
 
@@ -236,6 +326,7 @@ async function run() {
 
   try {
     const precheck = await runReadinessChecks(client);
+    report.precheck = precheck;
     console.log(
       `Precheck PASS long_txn=${precheck.longTxnCount} blocking_locks=${precheck.blockingPairCount} free_percent=${precheck.freePercent}`
     );
@@ -243,6 +334,7 @@ async function run() {
     for (const scriptName of scripts) {
       const loaded = readSql(scriptName);
       const batchCode = loaded.scriptName.split("_")[0];
+      const startedAt = Date.now();
       const runKey = await logRunStart(client, {
         batchCode,
         scriptName: loaded.scriptName,
@@ -253,13 +345,36 @@ async function run() {
         await client.query(loaded.sql);
         await logRunFinish(client, runKey, "SUCCEEDED", null);
         console.log(`PASS ${loaded.scriptName}`);
+        report.scripts.push({
+          scriptName: loaded.scriptName,
+          checksum: loaded.checksum,
+          status: "PASS",
+          durationMs: Date.now() - startedAt,
+          errorMessage: null
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "UNKNOWN_SQL_ERROR";
         await logRunFinish(client, runKey, "FAILED", errorMessage);
+        report.result = "FAIL";
+        report.errorMessage = `Script failed: ${loaded.scriptName} -> ${errorMessage}`;
+        report.scripts.push({
+          scriptName: loaded.scriptName,
+          checksum: loaded.checksum,
+          status: "FAIL",
+          durationMs: Date.now() - startedAt,
+          errorMessage
+        });
         throw new Error(`Script failed: ${loaded.scriptName} -> ${errorMessage}`);
       }
     }
+  } catch (error) {
+    report.result = "FAIL";
+    report.errorMessage = error instanceof Error ? error.message : "PHASE2_MIGRATION_FAILED";
+    throw error;
   } finally {
+    const paths = await writeReconReport(report);
+    console.log(`REPORT_JSON=${paths.jsonPath}`);
+    console.log(`REPORT_MD=${paths.markdownPath}`);
     await client.end();
   }
 }

@@ -10,6 +10,7 @@ build/
 coverage/
 .next/
 .next-dev/
+reports/
 
 # Environment files
 .env

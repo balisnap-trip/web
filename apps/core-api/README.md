@@ -20,6 +20,7 @@ Dry-run:
 
 ```bash
 set PHASE2_DRY_RUN=true
+set PHASE2_BATCH_CODE=A
 pnpm --filter @bst/core-api migrate:phase2
 ```
 
@@ -29,8 +30,14 @@ Execute against `ops_db`:
 set OPS_DB_URL=postgresql://postgres:postgres@localhost:5432/ops_db
 set PRECHECK_DISK_TOTAL_BYTES=100000000000
 set PRECHECK_DISK_USED_BYTES=60000000000
+set PHASE2_BATCH_CODE=A
 pnpm --filter @bst/core-api migrate:phase2
 ```
+
+Reports are written to:
+
+- `reports/recon/{PHASE2_BATCH_CODE}/{timestamp}.json`
+- `reports/recon/{PHASE2_BATCH_CODE}/{timestamp}.md`
 
 ## Ingestion Security
 
