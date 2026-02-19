@@ -1,0 +1,52 @@
+name: Admin Auth Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_api_base_url:
+        description: "Base URL core-api target"
+        required: true
+        type: string
+      expect_admin_auth_enforced:
+        description: "Expect endpoints to enforce admin auth (401/403 checks)"
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  admin-auth-smoke:
+    name: Run Admin Auth Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CORE_API_BASE_URL: ${{ inputs.core_api_base_url }}
+      CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CORE_API_ADMIN_ROLE: ADMIN
+      EXPECT_ADMIN_AUTH_ENFORCED: ${{ inputs.expect_admin_auth_enforced }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate CORE_API_ADMIN_TOKEN secret
+        run: |
+          if [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run admin auth smoke
+        run: pnpm --filter @bst/core-api smoke:admin-auth

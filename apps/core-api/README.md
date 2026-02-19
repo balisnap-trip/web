@@ -173,6 +173,11 @@ Optional:
 
 - `EXPECT_ADMIN_AUTH_ENFORCED` (default `true`)
 
+CI execution:
+
+- GitHub Actions manual workflow: `.github/workflows/admin-auth-smoke.yml`
+- workflow membutuhkan secret repository `CORE_API_ADMIN_TOKEN`
+
 ## Ingest Burst Load Test
 
 Run burst load test against a running server:
