@@ -4,13 +4,37 @@ import { fileURLToPath } from "url";
 
 const baseUrl = process.env.CORE_API_BASE_URL || "http://localhost:4000";
 const endpointPath = "/v1/ingest/metrics/queue";
-const windowMinutes = readNumber("GATE_WINDOW_MINUTES", 120, 1);
-const sampleIntervalSeconds = readNumber("GATE_SAMPLE_INTERVAL_SECONDS", 60, 5);
-const maxDlqGrowthPerHour = readNumber("GATE_DLQ_MAX_GROWTH_PER_HOUR", 20, 0);
-const requestTimeoutMs = readNumber("GATE_REQUEST_TIMEOUT_MS", 10_000, 1_000);
-const maxFetchErrors = readNumber("GATE_MAX_FETCH_ERRORS", 0, 0);
-const maxQueueWaiting = readNumberOrNull("GATE_MAX_QUEUE_WAITING");
-const maxQueueFailed = readNumberOrNull("GATE_MAX_QUEUE_FAILED");
+const windowMinutes = readNumberWithFallback(
+  ["GATE_DLQ_WINDOW_MINUTES", "GATE_WINDOW_MINUTES"],
+  120,
+  1
+);
+const sampleIntervalSeconds = readNumberWithFallback(
+  ["GATE_DLQ_SAMPLE_INTERVAL_SECONDS", "GATE_SAMPLE_INTERVAL_SECONDS"],
+  60,
+  5
+);
+const maxDlqGrowthPerHour = readNumberWithFallback(
+  ["GATE_DLQ_MAX_GROWTH_PER_HOUR"],
+  20,
+  0
+);
+const requestTimeoutMs = readNumberWithFallback(
+  ["GATE_DLQ_REQUEST_TIMEOUT_MS", "GATE_REQUEST_TIMEOUT_MS"],
+  10_000,
+  1_000
+);
+const maxFetchErrors = readNumberWithFallback(
+  ["GATE_DLQ_MAX_FETCH_ERRORS", "GATE_MAX_FETCH_ERRORS"],
+  0,
+  0
+);
+const maxQueueWaiting = readNumberOrNullWithFallback(
+  ["GATE_DLQ_MAX_QUEUE_WAITING", "GATE_MAX_QUEUE_WAITING"]
+);
+const maxQueueFailed = readNumberOrNullWithFallback(
+  ["GATE_DLQ_MAX_QUEUE_FAILED", "GATE_MAX_QUEUE_FAILED"]
+);
 const includedStatuses = readStatuses(
   process.env.GATE_DLQ_INCLUDE_STATUSES || "OPEN,READY,REPLAYING,FAILED"
 );
@@ -19,28 +43,36 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const reportRootDir = path.resolve(__dirname, "../../../reports/gates/ingest-dlq-growth");
 
-function readNumber(key, fallback, minValue) {
-  const raw = process.env[key];
-  if (!raw) {
+function readNumberWithFallback(keys, fallback, minValue) {
+  const selectedKey = keys.find((key) => {
+    const raw = process.env[key];
+    return raw !== undefined && raw !== "";
+  });
+  if (!selectedKey) {
     return fallback;
   }
 
+  const raw = process.env[selectedKey];
   const value = Number(raw);
   if (!Number.isFinite(value) || value < minValue) {
-    throw new Error(`${key} must be a number >= ${minValue}`);
+    throw new Error(`${selectedKey} must be a number >= ${minValue}`);
   }
   return value;
 }
 
-function readNumberOrNull(key) {
-  const raw = process.env[key];
-  if (!raw) {
+function readNumberOrNullWithFallback(keys) {
+  const selectedKey = keys.find((key) => {
+    const raw = process.env[key];
+    return raw !== undefined && raw !== "";
+  });
+  if (!selectedKey) {
     return null;
   }
 
+  const raw = process.env[selectedKey];
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 0) {
-    throw new Error(`${key} must be a number >= 0`);
+    throw new Error(`${selectedKey} must be a number >= 0`);
   }
   return value;
 }

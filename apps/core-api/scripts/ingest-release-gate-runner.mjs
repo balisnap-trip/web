@@ -23,6 +23,22 @@ function nowTimestampForFile() {
   return new Date().toISOString().replace(/[:.]/g, "-");
 }
 
+function formatMetric(value) {
+  if (typeof value === "number") {
+    if (Number.isInteger(value)) {
+      return String(value);
+    }
+    return value.toFixed(4);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  if (value === null || value === undefined) {
+    return "n/a";
+  }
+  return String(value);
+}
+
 function parseGateOutput(text) {
   const lines = text.split(/\r?\n/).map((line) => line.trim());
   const gateResultLine = lines.find((line) => line.startsWith("GATE_RESULT="));
@@ -86,11 +102,80 @@ function readGateReportPreview(reportPath) {
   }
 }
 
+function summarizeGate(gate) {
+  const summary = gate.gateReportPreview?.summary;
+  if (!summary || typeof summary !== "object") {
+    return "n/a";
+  }
+
+  if (gate.name === "F-01_F-02_INGEST_PROCESSING") {
+    const successRate = formatMetric(summary.successRate);
+    const p95 = formatMetric(summary.latencyP95Ms);
+    const median = formatMetric(summary.latencyMedianMs);
+    const received = formatMetric(summary.received);
+    return `successRate=${successRate}, latencyMedianMs=${median}, latencyP95Ms=${p95}, received=${received}`;
+  }
+
+  if (gate.name === "F-03_DLQ_GROWTH_AFTER_PEAK") {
+    const growthPerHour = formatMetric(summary.dlqGrowthPerHour);
+    const queueWaitingMax = formatMetric(summary.maxObservedQueueWaiting);
+    const fetchErrors = formatMetric(summary.fetchErrors);
+    return `dlqGrowthPerHour=${growthPerHour}, queueWaitingMax=${queueWaitingMax}, fetchErrors=${fetchErrors}`;
+  }
+
+  const keys = Object.keys(summary).slice(0, 4);
+  if (keys.length === 0) {
+    return "n/a";
+  }
+  return keys.map((key) => `${key}=${formatMetric(summary[key])}`).join(", ");
+}
+
+function createMarkdownReport(report, jsonPath) {
+  const lines = [];
+  lines.push("# Ingest Release Gate Report");
+  lines.push("");
+  lines.push(`- startedAt: ${report.startedAt}`);
+  lines.push(`- endedAt: ${report.endedAt}`);
+  lines.push(`- result: ${report.result}`);
+  lines.push(`- json report: ${jsonPath}`);
+  lines.push("");
+  lines.push("## Gate Results");
+  lines.push("");
+  lines.push("| Gate | Result | Exit Code | Summary | Report |");
+  lines.push("|---|---|---:|---|---|");
+
+  for (const gate of report.gates) {
+    lines.push(
+      `| ${gate.name} | ${gate.passed ? "PASS" : "FAIL"} | ${gate.exitCode} | ${summarizeGate(gate)} | ${gate.gateReportPath ?? "n/a"} |`
+    );
+  }
+
+  lines.push("");
+  if (report.result !== "PASS") {
+    lines.push("## Failed Gates");
+    lines.push("");
+    for (const gate of report.gates.filter((item) => !item.passed)) {
+      lines.push(`- ${gate.name}: gateResult=${gate.gateResult}, exitCode=${gate.exitCode}`);
+    }
+    lines.push("");
+  }
+
+  return `${lines.join("\n")}\n`;
+}
+
 async function writeReport(report) {
   await mkdir(reportRootDir, { recursive: true });
-  const reportPath = path.join(reportRootDir, `${nowTimestampForFile()}.json`);
+  const timestamp = nowTimestampForFile();
+  const reportPath = path.join(reportRootDir, `${timestamp}.json`);
+  const markdownPath = path.join(reportRootDir, `${timestamp}.md`);
+
   await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  return reportPath;
+  await writeFile(markdownPath, createMarkdownReport(report, reportPath), "utf8");
+
+  return {
+    reportPath,
+    markdownPath
+  };
 }
 
 async function run() {
@@ -120,9 +205,10 @@ async function run() {
     gates
   };
 
-  const reportPath = await writeReport(report);
+  const paths = await writeReport(report);
   console.log(`RELEASE_GATE_RESULT=${report.result}`);
-  console.log(`RELEASE_GATE_REPORT_JSON=${reportPath}`);
+  console.log(`RELEASE_GATE_REPORT_JSON=${paths.reportPath}`);
+  console.log(`RELEASE_GATE_REPORT_MD=${paths.markdownPath}`);
 
   if (failedGates.length > 0) {
     for (const failed of failedGates) {

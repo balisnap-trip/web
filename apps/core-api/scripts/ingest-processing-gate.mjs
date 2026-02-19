@@ -3,27 +3,59 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const baseUrl = process.env.CORE_API_BASE_URL || "http://localhost:4000";
-const windowMinutes = readNumber("GATE_WINDOW_MINUTES", 60, 1);
-const minSuccessRate = readNumber("GATE_MIN_SUCCESS_RATE", 0.995, 0);
-const maxMedianMs = readNumber("GATE_MAX_MEDIAN_MS", 3_000, 1);
-const maxP95Ms = readNumber("GATE_MAX_P95_MS", 15_000, 1);
-const minReceived = readNumber("GATE_MIN_RECEIVED", 1, 0);
-const minLatencySample = readNumber("GATE_MIN_LATENCY_SAMPLE", 1, 0);
-const requestTimeoutMs = readNumber("GATE_REQUEST_TIMEOUT_MS", 10_000, 1_000);
+const windowMinutes = readNumberWithFallback(
+  ["GATE_PROCESSING_WINDOW_MINUTES", "GATE_WINDOW_MINUTES"],
+  60,
+  1
+);
+const minSuccessRate = readNumberWithFallback(
+  ["GATE_PROCESSING_MIN_SUCCESS_RATE", "GATE_MIN_SUCCESS_RATE"],
+  0.995,
+  0
+);
+const maxMedianMs = readNumberWithFallback(
+  ["GATE_PROCESSING_MAX_MEDIAN_MS", "GATE_MAX_MEDIAN_MS"],
+  3_000,
+  1
+);
+const maxP95Ms = readNumberWithFallback(
+  ["GATE_PROCESSING_MAX_P95_MS", "GATE_MAX_P95_MS"],
+  15_000,
+  1
+);
+const minReceived = readNumberWithFallback(
+  ["GATE_PROCESSING_MIN_RECEIVED", "GATE_MIN_RECEIVED"],
+  1,
+  0
+);
+const minLatencySample = readNumberWithFallback(
+  ["GATE_PROCESSING_MIN_LATENCY_SAMPLE", "GATE_MIN_LATENCY_SAMPLE"],
+  1,
+  0
+);
+const requestTimeoutMs = readNumberWithFallback(
+  ["GATE_PROCESSING_REQUEST_TIMEOUT_MS", "GATE_REQUEST_TIMEOUT_MS"],
+  10_000,
+  1_000
+);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const reportRootDir = path.resolve(__dirname, "../../../reports/gates/ingest-processing");
 
-function readNumber(key, fallback, minValue) {
-  const raw = process.env[key];
-  if (!raw) {
+function readNumberWithFallback(keys, fallback, minValue) {
+  const selectedKey = keys.find((key) => {
+    const raw = process.env[key];
+    return raw !== undefined && raw !== "";
+  });
+  if (!selectedKey) {
     return fallback;
   }
 
+  const raw = process.env[selectedKey];
   const value = Number(raw);
   if (!Number.isFinite(value) || value < minValue) {
-    throw new Error(`${key} must be a number >= ${minValue}`);
+    throw new Error(`${selectedKey} must be a number >= ${minValue}`);
   }
   return value;
 }
