@@ -4,6 +4,13 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { driverSuggestionService } from '@/lib/services/driver-suggestion'
 import { syncBookingStatus } from '@/lib/booking/status'
+import {
+  assignCoreOpsBooking,
+  isOpsWriteCoreEnabled,
+  isOpsWriteCoreStrict,
+  syncCoreOpsBookingStatus,
+  unassignCoreOpsBooking,
+} from '@/lib/integrations/core-api-ops'
 
 /**
  * POST /api/bookings/[id]/assign
@@ -62,6 +69,35 @@ export async function POST(
         { error: 'Driver not found' },
         { status: 404 }
       )
+    }
+
+    const coreLookupId = booking.bookingRef?.trim() || String(booking.id)
+    if (isOpsWriteCoreEnabled()) {
+      const coreAssignResult = await assignCoreOpsBooking(coreLookupId, Number(driverId))
+      if (!coreAssignResult.ok) {
+        if (isOpsWriteCoreStrict()) {
+          return NextResponse.json(
+            {
+              error: `core-api assignment failed: ${coreAssignResult.error}`,
+            },
+            { status: 502 }
+          )
+        }
+        console.warn(
+          '[API /bookings/[id]/assign] core-api assignment fallback:',
+          coreAssignResult.status,
+          coreAssignResult.error
+        )
+      } else {
+        const coreSyncResult = await syncCoreOpsBookingStatus(coreLookupId)
+        if (!coreSyncResult.ok) {
+          console.warn(
+            '[API /bookings/[id]/assign] core-api sync warning:',
+            coreSyncResult.status,
+            coreSyncResult.error
+          )
+        }
+      }
     }
 
     // Update booking with driver assignment
@@ -151,6 +187,35 @@ export async function DELETE(
     }
 
     const oldDriver = booking.driver
+
+    const coreLookupId = booking.bookingRef?.trim() || String(booking.id)
+    if (isOpsWriteCoreEnabled()) {
+      const coreUnassignResult = await unassignCoreOpsBooking(coreLookupId)
+      if (!coreUnassignResult.ok) {
+        if (isOpsWriteCoreStrict()) {
+          return NextResponse.json(
+            {
+              error: `core-api unassign failed: ${coreUnassignResult.error}`,
+            },
+            { status: 502 }
+          )
+        }
+        console.warn(
+          '[API /bookings/[id]/assign] core-api unassign fallback:',
+          coreUnassignResult.status,
+          coreUnassignResult.error
+        )
+      } else {
+        const coreSyncResult = await syncCoreOpsBookingStatus(coreLookupId)
+        if (!coreSyncResult.ok) {
+          console.warn(
+            '[API /bookings/[id]/assign] core-api sync warning:',
+            coreSyncResult.status,
+            coreSyncResult.error
+          )
+        }
+      }
+    }
 
     // Unassign driver
     const updatedBooking = await prisma.booking.update({

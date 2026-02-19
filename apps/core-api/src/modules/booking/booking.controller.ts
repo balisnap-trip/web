@@ -55,6 +55,14 @@ export class BookingController {
     return successEnvelope(this.bookingService.assign(id, body.driverId));
   }
 
+  @Post(":id/unassign")
+  @ApiOperation({ summary: "Unassign driver from booking" })
+  @ApiParam({ name: "id", example: "book_demo_001" })
+  @RequireAdminRoles("ADMIN", "MANAGER")
+  unassign(@Param("id") id: string) {
+    return successEnvelope(this.bookingService.unassign(id));
+  }
+
   @Post(":id/status/sync")
   @ApiOperation({ summary: "Recompute booking fulfillment status" })
   @ApiParam({ name: "id", example: "book_demo_001" })

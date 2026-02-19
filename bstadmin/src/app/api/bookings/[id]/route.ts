@@ -3,6 +3,16 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { syncBookingStatus } from '@/lib/booking/status'
+import {
+  assignCoreOpsBooking,
+  fetchCoreOpsBookingDetail,
+  isOpsReadNewModelEnabled,
+  isOpsWriteCoreEnabled,
+  isOpsWriteCoreStrict,
+  patchCoreOpsBooking,
+  syncCoreOpsBookingStatus,
+  unassignCoreOpsBooking,
+} from '@/lib/integrations/core-api-ops'
 
 /**
  * GET /api/bookings/[id]
@@ -23,8 +33,16 @@ export async function GET(
 
   try {
     const { id } = await params
+    const bookingId = parseInt(id)
+    if (Number.isNaN(bookingId)) {
+      return NextResponse.json(
+        { error: 'Invalid booking id' },
+        { status: 400 }
+      )
+    }
+
     const booking = await prisma.booking.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: bookingId },
       include: {
         package: { include: { tour: true } },
         driver: true,
@@ -61,12 +79,39 @@ export async function GET(
         .sort((a, b) => a.getTime() - b.getTime())[0] ||
       null
 
+    let mergedBooking: any = {
+      ...booking,
+      totalPrice: Number(booking.totalPrice),
+      otaReceivedAt: createdReceivedAt,
+    }
+
+    if (isOpsReadNewModelEnabled()) {
+      const coreLookupId = booking.bookingRef?.trim() || String(booking.id)
+      const coreResult = await fetchCoreOpsBookingDetail(coreLookupId)
+
+      if (coreResult.ok && coreResult.data) {
+        mergedBooking = {
+          ...mergedBooking,
+          source: coreResult.data.channelCode || mergedBooking.source,
+          status: coreResult.data.opsFulfillmentStatus || mergedBooking.status,
+          meetingPoint: coreResult.data.meetingPoint ?? mergedBooking.meetingPoint,
+          note: coreResult.data.note ?? mergedBooking.note,
+          assignedDriverId:
+            coreResult.data.assignedDriverId === undefined
+              ? mergedBooking.assignedDriverId
+              : coreResult.data.assignedDriverId,
+        }
+      } else if (coreResult.status !== 404) {
+        console.warn(
+          '[API /bookings/[id]] core-api read fallback:',
+          coreResult.status,
+          coreResult.error
+        )
+      }
+    }
+
     return NextResponse.json({
-      booking: {
-        ...booking,
-        totalPrice: Number(booking.totalPrice),
-        otaReceivedAt: createdReceivedAt,
-      },
+      booking: mergedBooking,
     })
   } catch (error) {
     console.error('[API /bookings/[id]] Error:', error)
@@ -98,6 +143,25 @@ export async function PATCH(
 
   try {
     const { id } = await params
+    const bookingId = parseInt(id)
+    if (Number.isNaN(bookingId)) {
+      return NextResponse.json(
+        { error: 'Invalid booking id' },
+        { status: 400 }
+      )
+    }
+
+    const existingBooking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+      select: { id: true, bookingRef: true, assignedDriverId: true },
+    })
+    if (!existingBooking) {
+      return NextResponse.json(
+        { error: 'Booking not found' },
+        { status: 404 }
+      )
+    }
+
     const body = await req.json()
     const { assignedDriverId, note, meetingPoint, packageId } = body
 
@@ -115,8 +179,66 @@ export async function PATCH(
       updateData.assignedAt = assignedDriverId ? new Date() : null
     }
 
+    const coreLookupId = existingBooking.bookingRef?.trim() || String(existingBooking.id)
+    if (isOpsWriteCoreEnabled()) {
+      if (note !== undefined || meetingPoint !== undefined) {
+        const corePatchResult = await patchCoreOpsBooking(coreLookupId, {
+          note,
+          meetingPoint,
+        })
+
+        if (!corePatchResult.ok) {
+          if (isOpsWriteCoreStrict()) {
+            return NextResponse.json(
+              {
+                error: `core-api patch failed: ${corePatchResult.error}`,
+              },
+              { status: 502 }
+            )
+          }
+          console.warn(
+            '[API /bookings/[id]] core-api patch fallback:',
+            corePatchResult.status,
+            corePatchResult.error
+          )
+        }
+      }
+
+      if (assignedDriverId !== undefined) {
+        const coreAssignResult =
+          assignedDriverId
+            ? await assignCoreOpsBooking(coreLookupId, Number(assignedDriverId))
+            : await unassignCoreOpsBooking(coreLookupId)
+
+        if (!coreAssignResult.ok) {
+          if (isOpsWriteCoreStrict()) {
+            return NextResponse.json(
+              {
+                error: `core-api assignment failed: ${coreAssignResult.error}`,
+              },
+              { status: 502 }
+            )
+          }
+          console.warn(
+            '[API /bookings/[id]] core-api assignment fallback:',
+            coreAssignResult.status,
+            coreAssignResult.error
+          )
+        } else {
+          const coreSyncResult = await syncCoreOpsBookingStatus(coreLookupId)
+          if (!coreSyncResult.ok) {
+            console.warn(
+              '[API /bookings/[id]] core-api sync warning:',
+              coreSyncResult.status,
+              coreSyncResult.error
+            )
+          }
+        }
+      }
+    }
+
     const booking = await prisma.booking.update({
-      where: { id: parseInt(id) },
+      where: { id: bookingId },
       data: updateData,
       include: {
         package: { include: { tour: true } },
