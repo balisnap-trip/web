@@ -5,6 +5,7 @@ NestJS baseline service for the unified booking core domain.
 ## Available Endpoints
 
 - `GET /health`
+- `GET /health/db`
 - `GET /docs`
 
 ## Run
