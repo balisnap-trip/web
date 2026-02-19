@@ -159,6 +159,14 @@ The smoke script will:
 6. validate ingest metrics endpoints (`queue` + `processing`)
 7. validate audit trail event for fail/status-update/replay flow
 
+CI execution:
+
+- GitHub Actions manual workflow: `.github/workflows/ingest-contract-smoke.yml`
+- workflow membutuhkan secret repository:
+  - `INGEST_SERVICE_TOKEN`
+  - `INGEST_SERVICE_SECRET`
+  - `CORE_API_ADMIN_TOKEN`
+
 ## Admin Auth Smoke Test
 
 Run RBAC smoke test for protected admin endpoints:

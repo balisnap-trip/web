@@ -1,0 +1,62 @@
+name: Ingest Contract Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_api_base_url:
+        description: "Base URL core-api target"
+        required: true
+        type: string
+      ingest_smoke_actor:
+        description: "Actor label for audit assertions"
+        required: true
+        default: "ci-smoke-runner"
+        type: string
+
+jobs:
+  ingest-contract-smoke:
+    name: Run Ingest Contract Smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CORE_API_BASE_URL: ${{ inputs.core_api_base_url }}
+      INGEST_SERVICE_TOKEN: ${{ secrets.INGEST_SERVICE_TOKEN }}
+      INGEST_SERVICE_SECRET: ${{ secrets.INGEST_SERVICE_SECRET }}
+      CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CORE_API_ADMIN_ROLE: ADMIN
+      INGEST_SMOKE_ACTOR: ${{ inputs.ingest_smoke_actor }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "$INGEST_SERVICE_TOKEN" ]; then
+            echo "Missing INGEST_SERVICE_TOKEN secret"
+            exit 1
+          fi
+          if [ -z "$INGEST_SERVICE_SECRET" ]; then
+            echo "Missing INGEST_SERVICE_SECRET secret"
+            exit 1
+          fi
+          if [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ingest contract smoke
+        run: pnpm --filter @bst/core-api smoke:ingest-contract
