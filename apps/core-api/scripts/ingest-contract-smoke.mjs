@@ -3,6 +3,7 @@ import { createHash, createHmac, randomUUID } from "crypto";
 const baseUrl = process.env.CORE_API_BASE_URL || "http://localhost:4000";
 const serviceToken = process.env.INGEST_SERVICE_TOKEN || "dev-service-token";
 const serviceSecret = process.env.INGEST_SERVICE_SECRET || "dev-service-secret";
+const actor = process.env.INGEST_SMOKE_ACTOR || "smoke-runner";
 
 function sha256Hex(input) {
   return createHash("sha256").update(input).digest("hex");
@@ -42,6 +43,13 @@ async function requestJson(path, options = {}) {
 function assertStatus(actual, expected, message) {
   if (actual !== expected) {
     throw new Error(`${message}. expected=${expected} actual=${actual}`);
+  }
+}
+
+function assertAuditContains(events, eventType) {
+  const found = events.some((event) => event?.eventType === eventType);
+  if (!found) {
+    throw new Error(`audit event not found: ${eventType}`);
   }
 }
 
@@ -115,7 +123,8 @@ async function run() {
   const failResponse = await requestJson(`/v1/ingest/bookings/events/${eventId}/fail`, {
     method: "POST",
     headers: {
-      "content-type": "application/json"
+      "content-type": "application/json",
+      "x-actor": actor
     },
     body: JSON.stringify({
       reasonCode: "SMOKE_FAILURE",
@@ -133,22 +142,45 @@ async function run() {
   const readyResponse = await requestJson(
     `/v1/ingest/dead-letter/${deadLetterKey}/status/READY`,
     {
-      method: "PATCH"
+      method: "PATCH",
+      headers: {
+        "x-actor": actor
+      }
     }
   );
   assertStatus(readyResponse.status, 200, "Dead-letter status update to READY failed");
 
   const replayResponse = await requestJson(`/v1/ingest/bookings/events/${eventId}/replay`, {
-    method: "POST"
+    method: "POST",
+    headers: {
+      "x-actor": actor
+    }
   });
   assertStatus(replayResponse.status, 202, "Replay endpoint failed");
 
   const deadLetterList = await requestJson("/v1/ingest/dead-letter?status=READY&limit=20");
   assertStatus(deadLetterList.status, 200, "Dead-letter list endpoint failed");
 
+  const metricsResponse = await requestJson("/v1/ingest/metrics/queue");
+  assertStatus(metricsResponse.status, 200, "Ingest metrics endpoint failed");
+  if (!metricsResponse.json?.data?.queue || !metricsResponse.json?.data?.deadLetter) {
+    throw new Error("Invalid ingest metrics payload");
+  }
+
+  const auditResponse = await requestJson("/v1/audit/events?limit=100");
+  assertStatus(auditResponse.status, 200, "Audit endpoint failed");
+  const auditEvents = Array.isArray(auditResponse.json?.data)
+    ? auditResponse.json.data.filter((event) => event?.actor === actor)
+    : [];
+
+  assertAuditContains(auditEvents, "INGEST_EVENT_MARKED_FAILED");
+  assertAuditContains(auditEvents, "INGEST_DEAD_LETTER_STATUS_UPDATED");
+  assertAuditContains(auditEvents, "INGEST_REPLAY_REQUESTED");
+
   console.log("SMOKE_TEST_RESULT=PASS");
   console.log(`EVENT_ID=${eventId}`);
   console.log(`DEAD_LETTER_KEY=${deadLetterKey}`);
+  console.log(`AUDIT_ACTOR=${actor}`);
   console.log(`BASE_URL=${baseUrl}`);
 }
 
