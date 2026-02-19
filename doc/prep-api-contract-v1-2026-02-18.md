@@ -53,7 +53,9 @@ Dokumen ini adalah spesifikasi implementasi kontrak lintas app, bukan hanya daft
    5. `x-nonce`,
    6. `x-idempotency-key`.
 4. Admin endpoints:
-   1. RBAC (`ADMIN`, `STAFF`, `MANAGER`).
+   1. `authorization: Bearer <admin-token>`,
+   2. `x-admin-role` in (`ADMIN`, `STAFF`, `MANAGER`),
+   3. RBAC enforced per endpoint capability (read vs write).
 
 ## 2.1 Signature Canonicalization (Locked)
 
@@ -190,7 +192,7 @@ Sunset policy:
    1. response: processing status + result
    2. status: `200`, `404`, `500`
 3. `POST /v1/ingest/bookings/events/{eventId}/replay`
-   1. auth: admin role
+   1. auth: admin token + role header (`x-admin-role`)
    2. status: `202`, `404`, `409`, `500`
 
 ## 4.3 Ops Booking APIs
