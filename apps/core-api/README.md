@@ -86,6 +86,14 @@ Reports are written to:
 - `reports/release-evidence/{PHASE2_BATCH_CODE}/{timestamp}.json`
 - `reports/release-evidence/{PHASE2_BATCH_CODE}/{timestamp}.md`
 
+CI execution:
+
+- GitHub Actions manual workflow: `.github/workflows/phase2-release-evidence.yml`
+- workflow membutuhkan:
+  - secret `OPS_DB_URL` (jika `RUN_EVIDENCE_QUALITY_CHECK=true`)
+  - variable repository `CORE_API_BASE_URL` (jika `RUN_EVIDENCE_INGEST_GATES=true`)
+  - secret `CORE_API_ADMIN_TOKEN` (jika `RUN_EVIDENCE_INGEST_GATES=true`)
+
 ## Ingestion Security
 
 `POST /v1/ingest/bookings/events` now validates:

@@ -124,6 +124,11 @@ Output evidence:
 5. `reports/release-evidence/{batch}/{timestamp}.json`
 6. `reports/release-evidence/{batch}/{timestamp}.md`
 
+Workflow automation:
+
+1. GitHub manual workflow:
+   1. `.github/workflows/phase2-release-evidence.yml`
+
 ## 5. Gate Result Template
 
 ```md
