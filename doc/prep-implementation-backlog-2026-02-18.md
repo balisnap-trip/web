@@ -272,12 +272,13 @@ Status: aktif
 | Sync `INGEST_SERVICE_TOKEN` + `INGEST_SERVICE_SECRET` ke emitter env | `DONE` | `/home/bonk/balisnaptrip/.env` + `/home/bonk/stagging-bst/current/balisnap/.env` |
 | Otomasi gate `F-00` runtime env baseline | `DONE` | `pnpm gate:ingest-env-baseline` + report `reports/gates/ingest-env-baseline/*` |
 | Smoke test ingest handshake setelah reload process | `DONE` | `SMOKE_TEST_RESULT=PASS` + `ADMIN_AUTH_SMOKE_RESULT=PASS` pada runtime `/home/bonk/backend/core-api-prod/current` |
-| Gate Batch F (`F-01/F-02/F-03`) ingest release | `DONE` | `/home/bonk/backend/core-api-prod/releases/20260219T192910Z/reports/gates/ingest-release/2026-02-19T19-52-42-450Z.json` |
-| Release evidence Batch F (ingest gate scope) | `DONE` | `/home/bonk/backend/core-api-prod/releases/20260219T192910Z/reports/release-evidence/F/2026-02-19T20-07-33-501Z.json` |
+| Gate Batch F (`F-01/F-02/F-03`) ingest release | `DONE` | `/home/bonk/backend/core-api-prod/releases/20260219T203740Z/reports/gates/ingest-release/2026-02-19T20-43-41-922Z.json` |
+| Release evidence Batch F (full scope) | `DONE` | `/home/bonk/backend/core-api-prod/releases/20260219T203740Z/reports/release-evidence/F/2026-02-19T20-43-41-931Z.json` |
+| Quality check phase2 (batch F) | `DONE` | `/home/bonk/backend/core-api-prod/releases/20260219T203740Z/reports/recon/quality/F/2026-02-19T20-38-31-465Z.json` |
 | Quality check phase2 (batch A) | `BLOCKED` | `FAILED_CHECK=unmapped_ratio_percent` karena denominator katalog `0` (`reports/recon/quality/A/2026-02-19T20-02-18-668Z.json`) |
 
 ## 12. Immediate Next Action
 
-1. Siapkan data denominator katalog (`catalog_product`/`catalog_variant`) sebelum menjalankan ulang `quality:phase2`.
-2. Jalankan ulang `pnpm --filter @bst/core-api quality:phase2` setelah denominator > 0.
-3. Setelah quality `PASS`, jalankan `pnpm --filter @bst/core-api release:evidence` full scope (`RUN_EVIDENCE_QUALITY_CHECK=true`).
+1. Lanjutkan EP-004 (`T-004-01`, `T-004-02`) untuk mengisi denominator katalog real (`catalog_product`/`catalog_variant`).
+2. Jalankan ulang `pnpm --filter @bst/core-api quality:phase2` untuk batch A tanpa override setelah denominator > 0.
+3. Setelah quality batch A `PASS`, jalankan `pnpm --filter @bst/core-api release:evidence` pada batch terkait sesuai runbook.

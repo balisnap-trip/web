@@ -9,6 +9,7 @@ const connectionString = process.env.OPS_DB_URL || "";
 const batchCode = process.env.PHASE2_BATCH_CODE || "phase2";
 const opsDoneNotPaidMaxRatio = readNumber("QUALITY_MAX_OPS_DONE_NOT_PAID_RATIO", 0.01, 0);
 const unmappedRatioMaxPercent = readNumber("QUALITY_MAX_UNMAPPED_RATIO_PERCENT", 5, 0);
+const allowEmptyCatalogDenominator = readBoolean("QUALITY_ALLOW_EMPTY_CATALOG_DENOMINATOR", false);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,15 @@ function readNumber(key, fallback, minValue) {
     throw new Error(`${key} must be a number >= ${minValue}`);
   }
   return value;
+}
+
+function readBoolean(key, fallback) {
+  const raw = process.env[key];
+  if (raw === undefined) {
+    return fallback;
+  }
+  const normalized = raw.trim().toLowerCase();
+  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
 }
 
 function nowTimestampForFile() {
@@ -233,15 +243,23 @@ async function run() {
       )
     );
 
-    const unmappedRatioPassed =
-      metrics.totalCatalogEntities > 0 &&
-      metrics.unmappedRatioPercent !== null &&
-      metrics.unmappedRatioPercent <= unmappedRatioMaxPercent;
+    const hasCatalogDenominator = metrics.totalCatalogEntities > 0;
+    const unmappedRatioPassed = hasCatalogDenominator
+      ? metrics.unmappedRatioPercent !== null &&
+        metrics.unmappedRatioPercent <= unmappedRatioMaxPercent
+      : allowEmptyCatalogDenominator && metrics.unmappedRows === 0;
+
+    const unmappedDetail = hasCatalogDenominator
+      ? `ratio=${metrics.unmappedRatioPercent ?? "n/a"}, max=${unmappedRatioMaxPercent}, unmapped=${metrics.unmappedRows}, denominator=${metrics.totalCatalogEntities}`
+      : allowEmptyCatalogDenominator
+        ? `ratio=n/a, max=${unmappedRatioMaxPercent}, unmapped=${metrics.unmappedRows}, denominator=0 (allowed by QUALITY_ALLOW_EMPTY_CATALOG_DENOMINATOR=true)`
+        : `ratio=n/a, max=${unmappedRatioMaxPercent}, unmapped=${metrics.unmappedRows}, denominator=0`;
+
     checks.push(
       checkResult(
         "unmapped_ratio_percent",
         unmappedRatioPassed,
-        `ratio=${metrics.unmappedRatioPercent ?? "n/a"}, max=${unmappedRatioMaxPercent}, unmapped=${metrics.unmappedRows}, denominator=${metrics.totalCatalogEntities}`
+        unmappedDetail
       )
     );
 
@@ -252,7 +270,8 @@ async function run() {
       result: checks.every((item) => item.passed) ? "PASS" : "FAIL",
       thresholds: {
         opsDoneNotPaidMaxRatio,
-        unmappedRatioMaxPercent
+        unmappedRatioMaxPercent,
+        allowEmptyCatalogDenominator
       },
       metrics,
       checks

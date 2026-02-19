@@ -194,6 +194,9 @@ Workflow automation:
 
 1. Daily reconciliation report:
    1. `pnpm --filter @bst/core-api report:reconciliation-daily`
+2. Transitional quality override (pre-catalog bridge):
+   1. `QUALITY_ALLOW_EMPTY_CATALOG_DENOMINATOR=true pnpm --filter @bst/core-api quality:phase2`
+   2. hanya valid jika `totalCatalogEntities=0` dan `unmappedRows=0`.
 
 Output evidence:
 

@@ -50,6 +50,8 @@ Environment penting:
    1. `pnpm --filter @bst/core-api release:evidence`
    2. jika quality check belum in-scope batch aktif, gunakan:
       1. `RUN_EVIDENCE_QUALITY_CHECK=false pnpm --filter @bst/core-api release:evidence`
+   3. jika batch masih pre-catalog bridge dan denominator katalog belum tersedia, quality bisa dijalankan dengan:
+      1. `QUALITY_ALLOW_EMPTY_CATALOG_DENOMINATOR=true pnpm --filter @bst/core-api quality:phase2`
 
 ## 3.1 Preflight Wajib Sebelum Gate
 
