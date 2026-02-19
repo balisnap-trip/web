@@ -42,3 +42,18 @@ pnpm --filter @bst/core-api migrate:phase2
 - `x-timestamp` (drift <= 5 minutes)
 - `x-nonce` (replay protection window 10 minutes)
 - `x-idempotency-key` (default retention 35 days in in-memory store)
+
+## Error Envelope
+
+HTTP errors are wrapped with:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "field X is required",
+    "details": {},
+    "requestId": "req_..."
+  }
+}
+```
