@@ -112,6 +112,8 @@ Scope: gate eksekusi batch A-H sebelum lanjut batch berikutnya.
    1. `pnpm --filter @bst/core-api gate:ingest-dlq-growth`
 3. Combined evidence run:
    1. `pnpm --filter @bst/core-api gate:ingest-release`
+4. Combined release evidence (quality + ingest gates):
+   1. `pnpm --filter @bst/core-api release:evidence`
 
 Output evidence:
 
@@ -119,6 +121,8 @@ Output evidence:
 2. `reports/gates/ingest-dlq-growth/{timestamp}.json`
 3. `reports/gates/ingest-release/{timestamp}.json`
 4. `reports/gates/ingest-release/{timestamp}.md`
+5. `reports/release-evidence/{batch}/{timestamp}.json`
+6. `reports/release-evidence/{batch}/{timestamp}.md`
 
 ## 5. Gate Result Template
 

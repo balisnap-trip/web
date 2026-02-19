@@ -64,6 +64,28 @@ CI execution:
 - GitHub Actions manual workflow: `.github/workflows/phase2-quality-check.yml`
 - workflow membutuhkan secret repository `OPS_DB_URL`
 
+## Phase-2 Release Evidence Runner
+
+Run combined release evidence stages (quality + ingest gates):
+
+```bash
+set OPS_DB_URL=postgresql://postgres:postgres@localhost:5432/ops_db
+set CORE_API_BASE_URL=http://localhost:4000
+set CORE_API_ADMIN_TOKEN=dev-admin-token
+set PHASE2_BATCH_CODE=A
+pnpm --filter @bst/core-api release:evidence
+```
+
+Toggles:
+
+- `RUN_EVIDENCE_QUALITY_CHECK` (default `true`)
+- `RUN_EVIDENCE_INGEST_GATES` (default `true`)
+
+Reports are written to:
+
+- `reports/release-evidence/{PHASE2_BATCH_CODE}/{timestamp}.json`
+- `reports/release-evidence/{PHASE2_BATCH_CODE}/{timestamp}.md`
+
 ## Ingestion Security
 
 `POST /v1/ingest/bookings/events` now validates:
