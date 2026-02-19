@@ -83,6 +83,15 @@ Queue runtime:
 - retry delays: 30s, 2m, 10m, 30m, 2h
 - non-retryable or max-attempt events: moved to DLQ (`ingest_dead_letter`)
 
+Retention runtime:
+
+- cleanup scheduler enabled by `INGEST_RETENTION_ENABLED`
+- default run interval: 24h (`INGEST_RETENTION_INTERVAL_MS`)
+- retention windows:
+  - idempotency log (`ingest_event_log`): 35 days
+  - dead-letter resolved/closed: 30 days
+  - unmapped queue resolved/closed: 90 days
+
 ## Error Envelope
 
 HTTP errors are wrapped with:
