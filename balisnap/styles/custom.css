@@ -1,0 +1,12 @@
+html {
+  scroll-behavior: smooth;
+}
+.swiper-wrapper {
+  padding-top: 2rem !important;
+  padding-bottom: 2rem !important;
+  cursor: grab;
+}
+
+.tm-carousel-wrapper + div {
+  display: none !important;
+}

@@ -1,0 +1,32 @@
+services:
+  bstadmin:
+    container_name: bstadmin-admin
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3100:3100"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    env_file:
+      - .env
+    restart: unless-stopped
+  gh-runner:
+    container_name: bstadmin-runner
+    build:
+      context: .
+      dockerfile: docker/runner/Dockerfile
+    # Must be able to access /var/run/docker.sock for `docker compose up -d --build` in workflow.
+    # Running as root inside the runner container avoids "Permission denied" on the docker socket.
+    user: "0:0"
+    environment:
+      - RUNNER_ALLOW_RUNASROOT=1
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    volumes:
+      - /home/bonk/actions-runner:/runner
+      - /home/bonk/bstadmin-admin:/home/bonk/bstadmin-admin
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped

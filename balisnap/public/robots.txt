@@ -1,0 +1,10 @@
+# *
+User-agent: *
+Allow: /
+Disallow: /api/
+
+# Host
+Host: https://balisnaptrip.com
+
+# Sitemaps
+Sitemap: https://balisnaptrip.com/sitemap.xml

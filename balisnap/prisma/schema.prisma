@@ -1,0 +1,586 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("POSTGRES_URL_NON_POOLING")
+}
+
+model User {
+  id             String          @id @default(cuid())
+  name           String?
+  email          String?         @unique
+  emailVerified  DateTime?
+  image          String?
+  phone_number   String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  accounts       Account[]
+  Authenticator  Authenticator[]
+  Bookings       Booking[]
+  CompanyReviews CompanyReview[]
+  Payments       Payment[]
+  sessions       Session[]
+}
+
+model Account {
+  id                String   @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+  user                 User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, credentialID])
+}
+
+enum TourServiceType {
+  PRIVATE
+  SHARED
+  CUSTOM
+}
+
+enum DepartureStatus {
+  DRAFT
+  OPEN
+  LIMITED
+  CLOSED
+  CANCELLED
+}
+
+enum TravelerType {
+  ADULT
+  CHILD
+  INFANT
+}
+
+enum BookingStatusV2 {
+  DRAFT
+  PENDING_PAYMENT
+  PAID
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  EXPIRED
+  REFUNDED
+}
+
+enum BookingItemStatus {
+  ACTIVE
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatusV2 {
+  PENDING
+  AUTHORIZED
+  COMPLETED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model TourProduct {
+  product_id         Int                @id @default(autoincrement())
+  legacy_package_id  Int?               @unique
+  product_name       String
+  slug               String             @unique
+  short_description  String?
+  description        String?
+  category           String?
+  country_code       String?            @default("ID") @db.VarChar(2)
+  region             String?
+  base_meeting_point String?
+  is_featured        Boolean            @default(false)
+  is_active          Boolean            @default(true)
+  thumbnail_url      String?
+  color_code         String?
+  priority           Int?               @db.SmallInt
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  LegacyPackage      TourPackage?       @relation("LegacyPackageProduct", fields: [legacy_package_id], references: [package_id])
+  TourProductMedia   TourProductMedia[]
+  TourVariants       TourVariant[]
+
+  @@index([is_active, is_featured], map: "tourproduct_active_featured_idx")
+}
+
+model TourProductMedia {
+  media_id    Int         @id @default(autoincrement())
+  product_id  Int
+  url         String
+  alt_text    String?
+  sort_order  Int         @default(0)
+  is_cover    Boolean     @default(false)
+  created_at  DateTime    @default(now())
+  TourProduct TourProduct @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+
+  @@index([product_id, sort_order], map: "tourproductmedia_product_sort_idx")
+}
+
+model TourVariant {
+  variant_id              Int                      @id @default(autoincrement())
+  product_id              Int
+  legacy_package_id       Int?                     @unique
+  variant_code            String
+  variant_name            String
+  service_type            TourServiceType          @default(PRIVATE)
+  duration_days           Int
+  duration_nights         Int?
+  min_pax                 Int                      @default(1)
+  max_pax                 Int?
+  currency_code           String                   @default("USD") @db.VarChar(3)
+  is_default              Boolean                  @default(false)
+  is_active               Boolean                  @default(true)
+  booking_cutoff_hours    Int                      @default(24)
+  cancellation_policy     String?
+  created_at              DateTime                 @default(now())
+  updated_at              DateTime                 @updatedAt
+  LegacyPackage           TourPackage?             @relation("LegacyPackageVariant", fields: [legacy_package_id], references: [package_id])
+  TourProduct             TourProduct              @relation(fields: [product_id], references: [product_id], onDelete: Cascade)
+  BookingItems            BookingItem[]
+  Departures              Departure[]
+  VariantAdditionalInfos  VariantAdditionalInfo[]
+  VariantExclusions       VariantExclusion[]
+  VariantHighlights       VariantHighlight[]
+  VariantInclusions       VariantInclusion[]
+  VariantItineraries      VariantItinerary[]
+  VariantOptionalFeatures VariantOptionalFeature[]
+  VariantRatePlans        VariantRatePlan[]
+  TourVariantMedia        TourVariantMedia[]
+
+  @@unique([product_id, variant_code], map: "tourvariant_product_code_key")
+  @@index([product_id, is_active], map: "tourvariant_product_active_idx")
+}
+
+model TourVariantMedia {
+  media_id    Int         @id @default(autoincrement())
+  variant_id  Int
+  url         String
+  alt_text    String?
+  sort_order  Int         @default(0)
+  is_cover    Boolean     @default(false)
+  created_at  DateTime    @default(now())
+  TourVariant TourVariant @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade)
+
+  @@index([variant_id, sort_order], map: "tourvariantmedia_variant_sort_idx")
+}
+
+model Departure {
+  departure_id      Int             @id @default(autoincrement())
+  variant_id        Int
+  departure_code    String?         @unique
+  start_date        DateTime
+  end_date          DateTime
+  cutoff_at         DateTime?
+  capacity_total    Int
+  capacity_reserved Int             @default(0)
+  status            DepartureStatus @default(OPEN)
+  meeting_point     String?
+  note              String?
+  is_active         Boolean         @default(true)
+  created_at        DateTime        @default(now())
+  updated_at        DateTime        @updatedAt
+  TourVariant       TourVariant     @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade)
+  BookingItems      BookingItem[]
+
+  @@index([variant_id, start_date], map: "departure_variant_start_idx")
+  @@index([status, start_date], map: "departure_status_start_idx")
+}
+
+model VariantRatePlan {
+  rate_plan_id  Int          @id @default(autoincrement())
+  variant_id    Int
+  traveler_type TravelerType
+  price         Decimal
+  currency_code String       @default("USD") @db.VarChar(3)
+  min_quantity  Int?
+  max_quantity  Int?
+  valid_from    DateTime?
+  valid_to      DateTime?
+  season_start  DateTime?    @db.Date
+  season_end    DateTime?    @db.Date
+  is_active     Boolean      @default(true)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+  TourVariant   TourVariant  @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade)
+
+  @@index([variant_id, traveler_type, is_active], map: "variantrateplan_variant_type_active_idx")
+  @@index([valid_from, valid_to], map: "variantrateplan_validity_idx")
+}
+
+model VariantItinerary {
+  itinerary_id     Int         @id @default(autoincrement())
+  variant_id       Int
+  activity_id      Int?
+  day              Int
+  sort_order       Int         @default(0)
+  title            String
+  description      String?
+  location         String?
+  start_time       DateTime?   @db.Time(6)
+  end_time         DateTime?   @db.Time(6)
+  duration_minutes Int?
+  created_at       DateTime    @default(now())
+  updated_at       DateTime    @updatedAt
+  Activity         Activity?   @relation(fields: [activity_id], references: [activity_id])
+  TourVariant      TourVariant @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade)
+
+  @@index([variant_id, day, sort_order], map: "variantitinerary_variant_day_sort_idx")
+}
+
+model VariantHighlight {
+  highlight_id Int         @id @default(autoincrement())
+  variant_id   Int
+  description  String
+  sort_order   Int         @default(0)
+  created_at   DateTime    @default(now())
+  TourVariant  TourVariant @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade)
+
+  @@index([variant_id, sort_order], map: "varianthighlight_variant_sort_idx")
+}
+
+model VariantOptionalFeature {
+  feature_id  Int         @id @default(autoincrement())
+  variant_id  Int
+  description String
+  sort_order  Int         @default(0)
+  created_at  DateTime    @default(now())
+  TourVariant TourVariant @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade)
+
+  @@index([variant_id, sort_order], map: "variantoptionalfeature_variant_sort_idx")
+}
+
+model VariantAdditionalInfo {
+  info_id     Int         @id @default(autoincrement())
+  variant_id  Int
+  description String
+  sort_order  Int         @default(0)
+  created_at  DateTime    @default(now())
+  TourVariant TourVariant @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade)
+
+  @@index([variant_id, sort_order], map: "variantadditionalinfo_variant_sort_idx")
+}
+
+model VariantInclusion {
+  variant_id   Int
+  inclusion_id Int
+  sort_order   Int?        @default(0)
+  note         String?
+  created_at   DateTime?   @default(now()) @db.Timestamptz(6)
+  Inclusion    Inclusion   @relation(fields: [inclusion_id], references: [inclusion_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_variant_inclusion")
+  TourVariant  TourVariant @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_variant_inclusion_variant")
+
+  @@id([variant_id, inclusion_id], map: "variantinclusion_pkey")
+}
+
+model VariantExclusion {
+  variant_id   Int
+  exclusion_id Int
+  sort_order   Int?        @default(0)
+  note         String?
+  created_at   DateTime?   @default(now()) @db.Timestamptz(6)
+  Exclusion    Exclusion   @relation(fields: [exclusion_id], references: [exclusion_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_variant_exclusion")
+  TourVariant  TourVariant @relation(fields: [variant_id], references: [variant_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_variant_exclusion_variant")
+
+  @@id([variant_id, exclusion_id], map: "variantexclusion_pkey")
+}
+
+model BookingItem {
+  booking_item_id   Int               @id @default(autoincrement())
+  booking_id        Int
+  variant_id        Int
+  departure_id      Int?
+  item_status       BookingItemStatus @default(ACTIVE)
+  currency_code     String            @default("USD") @db.VarChar(3)
+  adult_qty         Int               @default(0)
+  child_qty         Int               @default(0)
+  infant_qty        Int               @default(0)
+  adult_unit_price  Decimal           @default(0)
+  child_unit_price  Decimal           @default(0)
+  infant_unit_price Decimal           @default(0)
+  subtotal          Decimal           @default(0)
+  discount_amount   Decimal           @default(0)
+  tax_amount        Decimal           @default(0)
+  total_amount      Decimal           @default(0)
+  snapshot          Json?
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
+  Booking           Booking           @relation(fields: [booking_id], references: [booking_id], onDelete: Cascade)
+  Departure         Departure?        @relation(fields: [departure_id], references: [departure_id], onDelete: SetNull)
+  TourVariant       TourVariant       @relation(fields: [variant_id], references: [variant_id], onDelete: Restrict)
+  BookingTravelers  BookingTraveler[]
+
+  @@index([booking_id], map: "bookingitem_booking_idx")
+  @@index([variant_id], map: "bookingitem_variant_idx")
+  @@index([departure_id], map: "bookingitem_departure_idx")
+}
+
+model BookingTraveler {
+  traveler_id     Int          @id @default(autoincrement())
+  booking_item_id Int
+  traveler_type   TravelerType @default(ADULT)
+  title           String?
+  first_name      String
+  last_name       String?
+  email           String?
+  phone           String?
+  birth_date      DateTime?    @db.Date
+  nationality     String?
+  passport_number String?
+  special_request String?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  BookingItem     BookingItem  @relation(fields: [booking_item_id], references: [booking_item_id], onDelete: Cascade)
+
+  @@index([booking_item_id], map: "bookingtraveler_bookingitem_idx")
+}
+
+model TourPackage {
+  package_id        Int               @id @default(autoincrement())
+  package_name      String
+  short_description String?
+  description       String?
+  duration_days     Int?
+  price_per_person  Decimal
+  price_per_child   Decimal?
+  min_booking       Int?
+  max_booking       Int?
+  is_featured       Boolean           @default(false)
+  thumbnail_url     String?
+  created_at        DateTime          @default(now())
+  updated_at        DateTime          @updatedAt
+  slug              String            @unique
+  color_code        String?
+  priority          Int?              @unique @db.SmallInt
+  LegacyProduct     TourProduct?      @relation("LegacyPackageProduct")
+  LegacyVariant     TourVariant?      @relation("LegacyPackageVariant")
+  AdditionalInfos   AdditionalInfo[]
+  Bookings          Booking[]
+  Highlights        Highlight[]
+  OptionalFeatures  OptionalFeature[]
+  TourExclusion     TourExclusion[]
+  TourImages        TourImage[]
+  TourInclusion     TourInclusion[]
+  TourItineraries   TourItinerary[]
+}
+
+model Activity {
+  activity_id        Int                @id @default(autoincrement())
+  activity_name      String
+  short_description  String?
+  description        String?
+  duration_hours     Decimal?
+  base_price         Decimal?
+  location           String?
+  thumbnail_url      String?
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
+  ActivityImages     ActivityImage[]
+  TourItineraries    TourItinerary[]
+  VariantItineraries VariantItinerary[]
+}
+
+model TourItinerary {
+  itinerary_id Int         @id @default(autoincrement())
+  package_id   Int
+  activity_id  Int
+  start_time   DateTime    @db.Time(6)
+  day          Int?        @default(0)
+  Activity     Activity    @relation(fields: [activity_id], references: [activity_id])
+  TourPackage  TourPackage @relation(fields: [package_id], references: [package_id])
+}
+
+model Booking {
+  booking_id         Int              @id @default(autoincrement())
+  user_id            String
+  package_id         Int?
+  booking_date       DateTime
+  total_price        Decimal
+  number_of_adult    Int
+  status             String           @default("pending")
+  status_v2          BookingStatusV2?
+  currency_code      String           @default("USD") @db.VarChar(3)
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+  booking_ref        String?          @unique
+  main_contact_name  String           @default("")
+  main_contact_email String           @default("")
+  phone_number       String           @default("")
+  meeting_point      String           @default("")
+  note               String?
+  number_of_child    Int?
+  TourPackage        TourPackage?     @relation(fields: [package_id], references: [package_id])
+  User               User             @relation(fields: [user_id], references: [id])
+  Payments           Payment[]
+  BookingItems       BookingItem[]
+  Reviews            Review[]
+
+  @@index([user_id, booking_date], map: "booking_user_date_idx")
+  @@index([status], map: "booking_status_idx")
+}
+
+model Review {
+  review_id  Int      @id @default(autoincrement())
+  booking_id Int
+  rating     Float    @db.Real
+  comment    String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  Booking    Booking  @relation(fields: [booking_id], references: [booking_id], onDelete: NoAction)
+
+  @@unique([booking_id], map: "review_booking_unique")
+}
+
+model CompanyReview {
+  company_review_id Int      @id @default(autoincrement())
+  user_id           String
+  rating            Int
+  comment           String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+  User              User     @relation(fields: [user_id], references: [id])
+}
+
+model Payment {
+  payment_id         Int              @id @default(autoincrement())
+  booking_id         Int
+  user_id            String
+  payment_date       DateTime         @default(now())
+  amount             Decimal
+  payment_method     String
+  payment_status     String           @default("pending")
+  payment_status_v2  PaymentStatusV2?
+  currency_code      String           @default("USD") @db.VarChar(3)
+  gateway            String?
+  gateway_order_id   String?
+  gateway_capture_id String?
+  raw_payload        Json?
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+  payment_ref        String?          @unique
+  Booking            Booking          @relation(fields: [booking_id], references: [booking_id])
+  User               User             @relation(fields: [user_id], references: [id])
+
+  @@index([booking_id, payment_status], map: "payment_booking_status_idx")
+  @@index([payment_date], map: "payment_date_idx")
+}
+
+model TourImage {
+  image_id    Int         @id @default(autoincrement())
+  url         String
+  tour_id     Int
+  created_at  DateTime    @default(now())
+  TourPackage TourPackage @relation(fields: [tour_id], references: [package_id])
+}
+
+model ActivityImage {
+  image_id    Int      @id @default(autoincrement())
+  url         String
+  activity_id Int
+  created_at  DateTime @default(now())
+  Activity    Activity @relation(fields: [activity_id], references: [activity_id])
+}
+
+model Highlight {
+  highlight_id Int         @id @default(autoincrement())
+  description  String
+  tour_id      Int
+  created_at   DateTime    @default(now())
+  TourPackage  TourPackage @relation(fields: [tour_id], references: [package_id])
+}
+
+model OptionalFeature {
+  feature_id  Int         @id @default(autoincrement())
+  description String
+  tour_id     Int
+  created_at  DateTime    @default(now())
+  TourPackage TourPackage @relation(fields: [tour_id], references: [package_id])
+}
+
+model Inclusion {
+  inclusion_id      Int                @id @default(autoincrement())
+  description       String
+  created_at        DateTime           @default(now())
+  TourInclusion     TourInclusion[]
+  VariantInclusions VariantInclusion[]
+}
+
+model Exclusion {
+  exclusion_id      Int                @id @default(autoincrement())
+  description       String
+  created_at        DateTime           @default(now())
+  TourExclusion     TourExclusion[]
+  VariantExclusions VariantExclusion[]
+}
+
+model AdditionalInfo {
+  info_id     Int         @id @default(autoincrement())
+  description String
+  tour_id     Int
+  created_at  DateTime    @default(now())
+  TourPackage TourPackage @relation(fields: [tour_id], references: [package_id])
+}
+
+model TourInclusion {
+  tour_id      Int
+  inclusion_id Int
+  created_at   DateTime?   @default(now()) @db.Timestamptz(6)
+  Inclusion    Inclusion   @relation(fields: [inclusion_id], references: [inclusion_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_inclusion")
+  TourPackage  TourPackage @relation(fields: [tour_id], references: [package_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tour")
+
+  @@id([tour_id, inclusion_id], map: "tourinclusion_pkey")
+}
+
+model TourExclusion {
+  tour_id      Int
+  exclusion_id Int
+  created_at   DateTime?   @default(now()) @db.Timestamptz(6)
+  Exclusion    Exclusion   @relation(fields: [exclusion_id], references: [exclusion_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_exclusion")
+  TourPackage  TourPackage @relation(fields: [tour_id], references: [package_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_tour")
+
+  @@id([tour_id, exclusion_id])
+}

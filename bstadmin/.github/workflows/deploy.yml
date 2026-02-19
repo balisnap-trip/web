@@ -1,0 +1,56 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    steps:
+      # Self-hosted runner already lives on the target server (or has the deploy directory mounted),
+      # so SSH is unnecessary and can fail in containerized runners that lack a passwd entry.
+      - name: Deploy locally on runner host
+        env:
+          DEPLOY_DIR: /home/bonk/bstadmin-admin/
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Some self-hosted runner containers don't have a writable HOME.
+          # Git and Docker CLIs may try to write to $HOME (gitconfig, docker config).
+          export HOME="${RUNNER_TEMP:-/tmp}"
+          export DOCKER_CONFIG="$HOME/.docker"
+          export GIT_CONFIG_GLOBAL="$HOME/.gitconfig"
+          mkdir -p "$DOCKER_CONFIG"
+
+          # Avoid "dubious ownership" errors on self-hosted runner volumes.
+          # Do this as early as possible, before any git command touches a repo.
+          git config --global --add safe.directory '*' || true
+
+          if [ ! -d "$DEPLOY_DIR" ]; then
+            echo "Deploy dir not found: $DEPLOY_DIR"
+            exit 1
+          fi
+
+          # Fetch using GitHub token without persisting credentials to disk.
+          AUTH="$(printf "x-access-token:%s" "$GITHUB_TOKEN" | base64 | tr -d '\n')"
+
+          if [ ! -d "$DEPLOY_DIR/.git" ]; then
+            echo "No git repo in $DEPLOY_DIR (missing .git)."
+            exit 1
+          fi
+
+          git -C "$DEPLOY_DIR" -c safe.directory="$DEPLOY_DIR" -c http.https://github.com/.extraheader="AUTHORIZATION: basic $AUTH" fetch https://github.com/balisnap-trip/bstadmin.git main
+          git -C "$DEPLOY_DIR" -c safe.directory="$DEPLOY_DIR" reset --hard FETCH_HEAD
+
+          cd "$DEPLOY_DIR"
+          docker compose version
+          # Only deploy the app container. Rebuilding/recreating the runner from inside the runner
+          # is fragile and can interrupt the job.
+          docker compose up -d --build bstadmin

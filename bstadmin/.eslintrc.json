@@ -1,0 +1,39 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": "warn",
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "JSXOpeningElement[name.name='button']",
+        "message": "Use <Button> from '@/components/ui/button' instead of <button> to keep styles consistent."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='select']",
+        "message": "Use <Select> from '@/components/ui/select' instead of <select> to keep styles consistent."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='textarea']",
+        "message": "Use <Textarea> from '@/components/ui/textarea' instead of <textarea> to keep styles consistent."
+      },
+      {
+        "selector": "JSXOpeningElement[name.name='input'] > JSXAttribute[name.name='type'][value.value='checkbox']",
+        "message": "Use <Checkbox> from '@/components/ui/checkbox' instead of <input type=\"checkbox\"> to keep styles consistent."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/components/ui/button.tsx",
+        "src/components/ui/checkbox.tsx",
+        "src/components/ui/select.tsx",
+        "src/components/ui/textarea.tsx"
+      ],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    }
+  ]
+}

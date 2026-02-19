@@ -1,0 +1,109 @@
+<mjml>
+  <mj-head>
+    <mj-title>Admin Booking Confirmation - Bali Snap Trip</mj-title>
+    <mj-font
+      name="Inter"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap"
+    ></mj-font>
+    <mj-attributes>
+      <mj-all font-family="Inter, Arial, sans-serif"></mj-all>
+    </mj-attributes>
+  </mj-head>
+  <mj-body>
+    <mj-section background-color="#ffffff" padding="20px 0">
+      <mj-column>
+        <mj-image
+          src="https://balisnap.vercel.app/logo.png"
+          alt="Bali Snap Trip Logo"
+          width="120px"
+        ></mj-image>
+        <mj-text
+          font-size="18px"
+          align="center"
+          color="#333333"
+          font-weight="500"
+          >PT. Bali Snap Trip</mj-text
+        >
+        <mj-text font-size="14px" align="center" color="#555555"
+          >Jln. Pantai Saba, Blahbatuh, Gianyar, Bali 80581</mj-text
+        >
+        <mj-text font-size="14px" align="center" color="#555555"
+          >Phone: +6281519440732 | Email: info@balisnaptrip.com</mj-text
+        >
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#f0f0f0">
+      <mj-column>
+        <mj-text
+          font-size="22px"
+          align="center"
+          color="#333333"
+          font-weight="700"
+          >Admin Booking Confirmation</mj-text
+        >
+        <mj-divider border-color="#cccccc"></mj-divider>
+        <mj-text font-size="16px" color="#333333" font-weight="400"
+          >Dear Admin,</mj-text
+        >
+        <mj-text
+          font-size="14px"
+          color="#555555"
+          font-weight="300"
+          line-height="1.5"
+          >A new booking has been made! Below are the details:</mj-text
+        >
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#f9f9f9">
+      <mj-column>
+        <mj-text font-size="16px" color="#333333" font-weight="400"
+          ><b>Booking Number:</b> [Booking Number]</mj-text
+        >
+        <mj-text font-size="16px" color="#333333" font-weight="400"
+          ><b>Tour Package:</b> [Tour Package Name]</mj-text
+        >
+        <mj-text font-size="16px" color="#333333" font-weight="400"
+          ><b>Date:</b> [Tour Date]</mj-text
+        >
+        <mj-text font-size="16px" color="#333333" font-weight="400"
+          ><b>Number of Adults:</b> [Number of Adults]</mj-text
+        >
+        <mj-text font-size="16px" color="#333333" font-weight="400"
+          ><b>Number of Children:</b> [Number of Children]</mj-text
+        >
+        <mj-text font-size="16px" color="#333333" font-weight="400"
+          ><b>Total Price:</b> [Total Price] USD</mj-text
+        >
+        <mj-text
+          font-size="14px"
+          color="#555555"
+          font-weight="300"
+          line-height="1.5"
+          >Please review the booking details above.</mj-text
+        >
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#f0f0f0">
+      <mj-column>
+        <mj-text
+          font-size="14px"
+          align="center"
+          color="#555555"
+          font-weight="300"
+          >Thank you for your attention to this new booking!</mj-text
+        >
+        <mj-text
+          font-size="14px"
+          align="center"
+          color="#555555"
+          font-weight="300"
+        >
+          Bali Snap Trip Team</mj-text
+        >
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>

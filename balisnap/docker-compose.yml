@@ -1,0 +1,18 @@
+services:
+  balisnaptrip:
+    build: .
+    container_name: balisnaptrip
+    ports:
+      - "5000:5000"   # mapping host port 5000 ke container port 5000
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - private-bonk-net
+    dns:
+      - 1.1.1.1     # Cloudflare DNS
+      - 8.8.8.8     # Google DNS fallback
+
+networks:
+  private-bonk-net:
+    external: true
