@@ -134,6 +134,7 @@ Dead-letter operations:
 - `POST /v1/ingest/bookings/events/{eventId}/fail` (move event to DLQ)
 - `GET /v1/ingest/metrics/queue` (queue depth + DLQ status metrics)
 - `GET /v1/ingest/metrics/processing?windowMinutes=60` (rolling success rate + latency)
+- `GET /v1/metrics/api?windowMinutes=15` (API status code rates + latency + throughput)
 
 Replay flow:
 
@@ -288,6 +289,34 @@ Optional thresholds:
 Gate report JSON akan ditulis ke:
 
 - `reports/gates/ingest-processing/{timestamp}.json`
+
+## API Health Gate (G-03)
+
+Run automated gate check for global gate:
+
+- `G-03` API 5xx core path `<= 1.5%` selama 15 menit
+
+```bash
+set CORE_API_BASE_URL=http://localhost:4000
+set CORE_API_ADMIN_TOKEN=dev-admin-token
+set GATE_API_WINDOW_MINUTES=15
+set GATE_API_MAX_5XX_RATE=0.015
+pnpm --filter @bst/core-api gate:api-health
+```
+
+Optional thresholds:
+
+- `GATE_API_MIN_REQUESTS` (default `1`)
+- `GATE_API_REQUEST_TIMEOUT_MS` (default `10000`)
+
+Gate report JSON akan ditulis ke:
+
+- `reports/gates/api-health/{timestamp}.json`
+
+CI execution:
+
+- GitHub Actions manual workflow: `.github/workflows/api-health-gate.yml`
+- workflow membutuhkan secret repository `CORE_API_ADMIN_TOKEN`
 
 ## Ingest Release Gate Runner
 

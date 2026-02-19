@@ -131,6 +131,22 @@ Workflow automation:
 2. Runbook operasional:
    1. `doc/runbook-ingest-release-gate-operations-2026-02-19.md`
 
+## 4.2 Gate Automation Commands (Global G-03)
+
+`apps/core-api` menyediakan command otomatis untuk global API health gate:
+
+1. `G-03` API 5xx core path:
+   1. `pnpm --filter @bst/core-api gate:api-health`
+
+Output evidence:
+
+1. `reports/gates/api-health/{timestamp}.json`
+
+Workflow automation:
+
+1. GitHub manual workflow:
+   1. `.github/workflows/api-health-gate.yml`
+
 ## 5. Gate Result Template
 
 ```md

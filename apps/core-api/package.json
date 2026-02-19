@@ -16,6 +16,7 @@
     "gate:ingest-processing": "node scripts/ingest-processing-gate.mjs",
     "gate:ingest-dlq-growth": "node scripts/ingest-dlq-growth-gate.mjs",
     "gate:ingest-release": "node scripts/ingest-release-gate-runner.mjs",
+    "gate:api-health": "node scripts/api-health-gate.mjs",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "echo \"No tests yet\""

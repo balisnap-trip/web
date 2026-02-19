@@ -1,0 +1,78 @@
+name: API Health Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_api_base_url:
+        description: "Base URL core-api target (contoh https://core-api-staging.example.com)"
+        required: true
+        type: string
+      gate_api_window_minutes:
+        description: "Observation window minutes"
+        required: true
+        default: "15"
+        type: string
+      gate_api_max_5xx_rate:
+        description: "Max allowed 5xx rate"
+        required: true
+        default: "0.015"
+        type: string
+      gate_api_min_requests:
+        description: "Minimum request sample in window"
+        required: true
+        default: "1"
+        type: string
+
+jobs:
+  api-health-gate:
+    name: Run API Health Gate (G-03)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CORE_API_BASE_URL: ${{ inputs.core_api_base_url }}
+      CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CORE_API_ADMIN_ROLE: ADMIN
+      GATE_API_WINDOW_MINUTES: ${{ inputs.gate_api_window_minutes }}
+      GATE_API_MAX_5XX_RATE: ${{ inputs.gate_api_max_5xx_rate }}
+      GATE_API_MIN_REQUESTS: ${{ inputs.gate_api_min_requests }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate CORE_API_ADMIN_TOKEN secret
+        run: |
+          if [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run API health gate
+        id: run_gate
+        run: pnpm --filter @bst/core-api gate:api-health
+        continue-on-error: true
+
+      - name: Upload API health reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-health-gate-reports
+          if-no-files-found: warn
+          path: reports/gates/api-health/**
+
+      - name: Mark workflow failed when gate check fails
+        if: steps.run_gate.outcome != 'success'
+        run: exit 1

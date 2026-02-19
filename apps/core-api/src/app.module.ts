@@ -6,9 +6,18 @@ import { CatalogModule } from "./modules/catalog/catalog.module";
 import { DatabaseModule } from "./modules/database/database.module";
 import { IngestModule } from "./modules/ingest/ingest.module";
 import { MappingModule } from "./modules/mapping/mapping.module";
+import { MetricsModule } from "./modules/metrics/metrics.module";
 
 @Module({
-  imports: [DatabaseModule, CatalogModule, BookingModule, IngestModule, MappingModule, AuditModule],
+  imports: [
+    DatabaseModule,
+    CatalogModule,
+    BookingModule,
+    IngestModule,
+    MappingModule,
+    AuditModule,
+    MetricsModule
+  ],
   controllers: [AppController]
 })
 export class AppModule {}

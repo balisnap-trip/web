@@ -20,6 +20,74 @@ export interface CoreApiResult<T> {
   error: string | null
 }
 
+export interface CoreApiRequestMetrics {
+  windowMinutes: number
+  generatedAt: string
+  uptimeSeconds: number
+  totals: {
+    requests: number
+    status2xx: number
+    status3xx: number
+    status4xx: number
+    status5xx: number
+  }
+  rates: {
+    successRate: number
+    error4xxRate: number
+    error5xxRate: number
+  }
+  throughput: {
+    requestsPerSecond: number
+    requestsPerMinute: number
+  }
+  latencyMs: {
+    sampleCount: number
+    avg: number
+    median: number
+    p95: number
+    max: number
+  }
+}
+
+export interface CoreIngestQueueMetrics {
+  queue: {
+    queueName: string
+    enabled: boolean
+    connected: boolean
+    waiting: number
+    active: number
+    delayed: number
+    completed: number
+    failed: number
+    paused: number
+    lastError: string | null
+  }
+  deadLetter: {
+    total: number
+    byStatus: Record<string, number>
+  }
+}
+
+export interface CoreIngestProcessingMetrics {
+  windowMinutes: number
+  totals: {
+    received: number
+    done: number
+    failed: number
+    processing: number
+    pending: number
+    terminal: number
+  }
+  successRate: number
+  failureRate: number
+  latenciesMs: {
+    sampleCount: number
+    median: number
+    p95: number
+    max: number
+  }
+}
+
 const DEFAULT_TIMEOUT_MS = 8000
 
 const readBoolean = (raw: string | undefined, fallback: boolean) => {
@@ -197,4 +265,17 @@ export const syncCoreOpsBookingStatus = async (idOrExternalRef: string) =>
     {
       method: 'POST',
     }
+  )
+
+export const fetchCoreApiRequestMetrics = async (windowMinutes = 15) =>
+  requestCoreApi<CoreApiRequestMetrics>(
+    `/v1/metrics/api?windowMinutes=${encodeURIComponent(String(windowMinutes))}`
+  )
+
+export const fetchCoreIngestQueueMetrics = async () =>
+  requestCoreApi<CoreIngestQueueMetrics>('/v1/ingest/metrics/queue')
+
+export const fetchCoreIngestProcessingMetrics = async (windowMinutes = 60) =>
+  requestCoreApi<CoreIngestProcessingMetrics>(
+    `/v1/ingest/metrics/processing?windowMinutes=${encodeURIComponent(String(windowMinutes))}`
   )

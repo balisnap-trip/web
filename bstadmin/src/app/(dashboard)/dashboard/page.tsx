@@ -68,6 +68,49 @@ interface RecentBooking {
   tourName: string
 }
 
+interface CoreApiDashboardMetrics {
+  api: {
+    ok: boolean
+    status: number
+    data: {
+      rates: {
+        error5xxRate: number
+      }
+      latencyMs: {
+        p95: number
+      }
+      totals: {
+        requests: number
+      }
+    } | null
+    error: string | null
+  }
+  ingestQueue: {
+    ok: boolean
+    status: number
+    data: {
+      queue: {
+        waiting: number
+      }
+      deadLetter: {
+        total: number
+      }
+    } | null
+    error: string | null
+  }
+  ingestProcessing: {
+    ok: boolean
+    status: number
+    data: {
+      successRate: number
+      latenciesMs: {
+        p95: number
+      }
+    } | null
+    error: string | null
+  }
+}
+
 const SOURCE_COLORS: Record<string, string> = {
   GYG: '#4F46E5',
   VIATOR: '#10B981',
@@ -83,6 +126,7 @@ export default function DashboardPage() {
   const [bookingsTrend, setBookingsTrend] = useState<BookingTrend[]>([])
   const [revenueTrend, setRevenueTrend] = useState<RevenueTrend[]>([])
   const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([])
+  const [coreMetrics, setCoreMetrics] = useState<CoreApiDashboardMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const { notify } = useNotifications()
 
@@ -92,8 +136,12 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const res = await fetch('/api/dashboard/stats')
-      const data = await res.json()
+      const [dashboardRes, coreMetricsRes] = await Promise.all([
+        fetch('/api/dashboard/stats'),
+        fetch('/api/observability/core-api?windowMinutes=15&processingWindowMinutes=60'),
+      ])
+      const data = await dashboardRes.json()
+      const coreData = await coreMetricsRes.json().catch(() => null)
       
       if (data.stats) {
         setStats(data.stats)
@@ -103,6 +151,12 @@ export default function DashboardPage() {
         setRecentBookings(data.recentBookings || [])
       } else {
         notify({ type: 'error', title: 'Load Dashboard Failed', message: data.error || 'Unable to load dashboard.' })
+      }
+
+      if (coreData?.coreApi) {
+        setCoreMetrics(coreData.coreApi)
+      } else {
+        setCoreMetrics(null)
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error)
@@ -225,6 +279,64 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      {/* Core API Observability */}
+      <Card className="p-4 hover:shadow-md transition-shadow duration-200 border-l-4 border-l-violet-500">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Core API Health</h2>
+          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">15m window</span>
+        </div>
+
+        {coreMetrics ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border bg-white p-3">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">API 5xx Rate</div>
+              <div className={`text-xl font-bold mt-1 ${
+                (coreMetrics.api.data?.rates.error5xxRate || 0) > 0.015 ? 'text-red-600' : 'text-green-600'
+              }`}>
+                {((coreMetrics.api.data?.rates.error5xxRate || 0) * 100).toFixed(2)}%
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                requests: {coreMetrics.api.data?.totals.requests || 0}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-white p-3">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">API Latency p95</div>
+              <div className="text-xl font-bold text-indigo-600 mt-1">
+                {Math.round(coreMetrics.api.data?.latencyMs.p95 || 0)} ms
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                status: {coreMetrics.api.ok ? 'OK' : `ERR (${coreMetrics.api.status})`}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-white p-3">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Ingest Queue Waiting</div>
+              <div className="text-xl font-bold text-amber-600 mt-1">
+                {coreMetrics.ingestQueue.data?.queue.waiting || 0}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                DLQ: {coreMetrics.ingestQueue.data?.deadLetter.total || 0}
+              </div>
+            </div>
+
+            <div className="rounded-lg border bg-white p-3">
+              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Ingest Success Rate</div>
+              <div className="text-xl font-bold text-emerald-600 mt-1">
+                {((coreMetrics.ingestProcessing.data?.successRate || 0) * 100).toFixed(2)}%
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                p95: {Math.round(coreMetrics.ingestProcessing.data?.latenciesMs.p95 || 0)} ms
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed bg-gray-50 p-6 text-sm text-gray-600">
+            Core API metrics belum tersedia.
+          </div>
+        )}
+      </Card>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
