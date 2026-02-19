@@ -81,7 +81,7 @@ Feature flag gates:
 - `INGEST_QUEUE_ENABLED` controls BullMQ worker + enqueue behavior
 - `INGEST_REPLAY_ENABLED` controls replay endpoint
 
-Admin auth for protected ops endpoints (`/v1/audit/*`, `/v1/ingest/dead-letter/*`, `/v1/ingest/metrics/*`, replay/fail):
+Admin auth for protected ops endpoints (`/v1/audit/*`, `/v1/ingest/dead-letter/*`, `/v1/ingest/metrics/*`, `/v1/ops/bookings/*`, `/v1/channel-mappings/*`, replay/fail):
 
 - `authorization: Bearer <admin-token>`
 - `x-admin-role: ADMIN | STAFF | MANAGER`
