@@ -19,6 +19,11 @@ const config = readConfig(args);
 const runInstall = args.includes("--run-install");
 const runBuild = args.includes("--run-build");
 const buildCoreApiOnly = args.includes("--build-core-api-only");
+const buildContentManagerOnly = args.includes("--build-content-manager-only");
+
+if (buildCoreApiOnly && buildContentManagerOnly) {
+  throw new Error("--build-core-api-only dan --build-content-manager-only tidak bisa dipakai bersamaan.");
+}
 
 let keepReleases = 5;
 const keepIndex = args.findIndex((token) => token === "--keep-releases");
@@ -40,8 +45,8 @@ ensureFileExists(config.sshKeyPath, "SSH key");
 const root = workspaceRoot();
 const releaseId = utcReleaseId();
 const releaseDir = `${config.remoteBase}/releases/${releaseId}`;
-const tmpArchive = path.join(os.tmpdir(), `masterbst-${releaseId}.tar`);
-const remoteArchive = `/tmp/masterbst-${releaseId}.tar`;
+const tmpArchive = path.join(os.tmpdir(), `stagging-bst-${releaseId}.tar`);
+const remoteArchive = `/tmp/stagging-bst-${releaseId}.tar`;
 
 let commit = "unknown";
 try {
@@ -137,6 +142,9 @@ if (runBuild) {
   if (buildCoreApiOnly) {
     console.log("==> Running core-api build on remote release");
     run("ssh", sshArgs(config, `set -eu; cd ${qReleaseDir}; pnpm --filter @bst/core-api build`));
+  } else if (buildContentManagerOnly) {
+    console.log("==> Running content-manager build on remote release");
+    run("ssh", sshArgs(config, `set -eu; cd ${qReleaseDir}; pnpm --filter @bst/content-manager build`));
   } else {
     console.log("==> Running workspace build on remote release");
     run("ssh", sshArgs(config, `set -eu; cd ${qReleaseDir}; pnpm build`));

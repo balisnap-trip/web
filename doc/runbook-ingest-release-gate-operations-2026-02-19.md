@@ -14,7 +14,7 @@ Scope: operasi gate ingestion (`F-00` s.d. `F-05`) + quality evidence phase-2.
 
 1. Service `core-api` reachable.
 2. Redis + queue runtime aktif (untuk observability queue).
-3. Akses DB `ops_db` (untuk quality check).
+3. Akses DB `balisnaptrip_ops` (untuk quality check).
 4. Target deploy path mengikuti `doc/prep-deployment-topology-strategy-2026-02-20.md`.
 
 Environment penting:
@@ -26,8 +26,23 @@ Environment penting:
 5. `REDIS_URL`
 6. `INGEST_REDIS_URL`
 7. `OPS_DB_URL`
-8. `PHASE2_BATCH_CODE`
-9. `WEB_EMIT_BOOKING_EVENT_ENABLED`
+8. `CHANNEL_DB_URL`
+9. `PHASE2_BATCH_CODE`
+10. `WEB_EMIT_BOOKING_EVENT_ENABLED`
+
+Catatan model DB:
+
+1. Runtime default menggunakan 2 DB:
+   1. `OPS_DB_URL` (operasional),
+   2. `CHANNEL_DB_URL` (content/channel).
+2. `BALISNAP_DB_URL` dan `BSTADMIN_DB_URL` hanya override opsional untuk script backfill lintas source; jika kosong maka fallback ke `OPS_DB_URL`.
+3. Script Batch C/D/E akan mencoba membaca legacy file lokal untuk source DB:
+   1. `balisnap/.env` (`DATABASE_URL`),
+   2. `bstadmin/.env` / `bstadmin/.env.production` (`DATABASE_URL`).
+4. Jika `OPS_DB_URL` tidak diset, script batch akan mencoba kandidat legacy berurutan:
+   1. `apps/core-api/.env` (`OPS_DB_URL`/`DATABASE_URL`),
+   2. `balisnap/.env` (`DATABASE_URL`),
+   3. `bstadmin/.env` / `.env.production` (`DATABASE_URL`/`SYNC_DATABASE_URL`).
 
 ## 2.1 Status Env Runtime (2026-02-20)
 
@@ -35,22 +50,57 @@ Environment penting:
 2. `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` sudah disinkronkan ke env `balisnaptrip` production existing dan staging current release.
 3. Nilai secret tidak ditaruh di dokumen; validasi dilakukan langsung di runtime `.env` dan workflow secret.
 
+## 2.2 Evidence Snapshot Terbaru (2026-02-20)
+
+1. Replay drill operasional (`T-007-04`) `PASS`:
+   1. `reports/gates/ingest-replay-drill/2026-02-20T04-45-41-148Z.json`.
+2. Ingest release gate gabungan (`F-01..F-05` + replay drill) `PASS`:
+   1. `reports/gates/ingest-release/2026-02-20T04-45-41-179Z.json`.
+3. Release evidence batch `F` (quality + ingest + catalog + booking + payment) `PASS`:
+   1. `reports/release-evidence/F/2026-02-20T04-45-41-655Z.json`.
+4. Catatan validasi lokal:
+   1. runtime lokal menggunakan `INGEST_SYNC_FALLBACK_ENABLED=true` dengan queue nonaktif untuk memastikan replay drill tetap dapat divalidasi saat Redis lokal tidak tersedia.
+
 ## 3. Jalur Eksekusi Lokal
 
 1. Preflight runtime env baseline (`F-00`):
    1. `pnpm gate:ingest-env-baseline`
 2. Quality check data:
    1. `pnpm --filter @bst/core-api quality:phase2`
-3. Ingest gates:
+3. Booking bridge backfill (Batch D):
+   1. `pnpm --filter @bst/core-api backfill:booking-bridge`
+4. Booking bridge gate (Batch D):
+   1. `pnpm --filter @bst/core-api gate:booking-bridge`
+5. Payment-finance bridge backfill (Batch E):
+   1. `pnpm --filter @bst/core-api backfill:payment-finance-bridge`
+6. Payment-finance bridge gate (Batch E):
+   1. `pnpm --filter @bst/core-api gate:payment-finance-bridge`
+7. Ingest gates:
    1. `pnpm --filter @bst/core-api gate:ingest-processing`
    2. `pnpm --filter @bst/core-api gate:ingest-dlq-growth`
-4. Combined ingest gates:
+   3. `pnpm --filter @bst/core-api gate:ingest-duplicate-delivery`
+   4. `pnpm --filter @bst/core-api gate:ingest-retention-policy`
+8. Replay drill operasional (`T-007-04`, DLQ lifecycle + audit):
+   1. `pnpm --filter @bst/core-api drill:ingest-replay`
+9. Combined ingest gates:
    1. `pnpm --filter @bst/core-api gate:ingest-release`
-5. Combined release evidence:
+10. Combined release evidence:
    1. `pnpm --filter @bst/core-api release:evidence`
    2. jika quality check belum in-scope batch aktif, gunakan:
       1. `RUN_EVIDENCE_QUALITY_CHECK=false pnpm --filter @bst/core-api release:evidence`
-   3. jika batch masih pre-catalog bridge dan denominator katalog belum tersedia, quality bisa dijalankan dengan:
+   3. jika batch C membutuhkan gate catalog bridge pada release evidence, gunakan:
+      1. `RUN_EVIDENCE_CATALOG_GATE=true pnpm --filter @bst/core-api release:evidence`
+   4. jika batch D membutuhkan gate booking bridge pada release evidence, gunakan:
+      1. `RUN_EVIDENCE_BOOKING_GATE=true pnpm --filter @bst/core-api release:evidence`
+   5. jika batch E membutuhkan gate payment-finance pada release evidence, gunakan:
+      1. `RUN_EVIDENCE_PAYMENT_GATE=true pnpm --filter @bst/core-api release:evidence`
+   6. jika perlu include replay drill (`T-007-04`) pada stage ingest gates:
+      1. `RUN_EVIDENCE_INGEST_REPLAY_DRILL=true pnpm --filter @bst/core-api release:evidence`
+   7. jika perlu include gate duplicate delivery (`F-04`) pada stage ingest gates:
+      1. `RUN_EVIDENCE_INGEST_DUPLICATE_GATE=true pnpm --filter @bst/core-api release:evidence`
+   8. jika perlu include gate retention policy (`F-05`) pada stage ingest gates:
+      1. `RUN_EVIDENCE_INGEST_RETENTION_GATE=true pnpm --filter @bst/core-api release:evidence`
+   9. jika batch masih pre-catalog bridge dan denominator katalog belum tersedia, quality bisa dijalankan dengan:
       1. `QUALITY_ALLOW_EMPTY_CATALOG_DENOMINATOR=true pnpm --filter @bst/core-api quality:phase2`
 
 ## 3.1 Preflight Wajib Sebelum Gate
@@ -80,6 +130,16 @@ Environment penting:
    1. `.github/workflows/phase2-quality-check.yml`
 5. Combined release evidence:
    1. `.github/workflows/phase2-release-evidence.yml`
+6. Catalog bridge gate (Batch C):
+   1. `.github/workflows/catalog-bridge-gate.yml`
+7. Booking bridge backfill (Batch D):
+   1. `.github/workflows/booking-bridge-backfill.yml`
+8. Booking bridge gate (Batch D):
+   1. `.github/workflows/booking-bridge-gate.yml`
+9. Payment-finance bridge backfill (Batch E):
+   1. `.github/workflows/payment-finance-bridge-backfill.yml`
+10. Payment-finance bridge gate (Batch E):
+   1. `.github/workflows/payment-finance-bridge-gate.yml`
 
 ## 5. Lokasi Evidence
 
@@ -87,15 +147,27 @@ Environment penting:
 2. `reports/gates/ingest-processing/*`
 3. `reports/gates/ingest-dlq-growth/*`
 4. `reports/gates/ingest-release/*`
-5. `reports/recon/quality/{batch}/*`
-6. `reports/release-evidence/{batch}/*`
+5. `reports/gates/ingest-duplicate-delivery/*`
+6. `reports/gates/ingest-retention-policy/*`
+7. `reports/gates/ingest-replay-drill/*`
+8. `reports/recon/quality/{batch}/*`
+9. `reports/release-evidence/{batch}/*`
+10. `reports/recon/{batch}/*-booking-bridge-backfill.*`
+11. `reports/gates/booking-bridge/*`
+12. `reports/recon/{batch}/*-payment-finance-bridge-backfill.*`
+13. `reports/gates/payment-finance/*`
 
 ## 6. Checklist Go/No-Go Singkat
 
 1. `gate:ingest-processing` = `PASS`.
 2. `gate:ingest-dlq-growth` = `PASS`.
-3. `quality:phase2` = `PASS`.
-4. Tidak ada failed stage di `release:evidence`.
+3. `gate:ingest-duplicate-delivery` = `PASS`.
+4. `gate:ingest-retention-policy` = `PASS`.
+5. `drill:ingest-replay` = `PASS` (untuk validasi operasional replay/DLQ lifecycle).
+6. `quality:phase2` = `PASS`.
+7. Tidak ada failed stage di `release:evidence`.
+8. Untuk scope Batch D: `gate:booking-bridge` = `PASS`.
+9. Untuk scope Batch E: `gate:payment-finance-bridge` = `PASS`.
 
 ## 7. Troubleshooting Cepat
 

@@ -14,6 +14,10 @@ export class IngestFeatureFlagsService {
     return this.readBool(process.env.INGEST_REPLAY_ENABLED, false);
   }
 
+  isSyncFallbackEnabled(): boolean {
+    return this.readBool(process.env.INGEST_SYNC_FALLBACK_ENABLED, false);
+  }
+
   assertWebhookEnabled() {
     if (!this.isWebhookEnabled()) {
       throw new ServiceUnavailableException("INGEST_WEBHOOK_DISABLED");

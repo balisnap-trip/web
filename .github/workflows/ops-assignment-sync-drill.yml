@@ -1,0 +1,60 @@
+name: Ops Assignment Sync Drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      ops_assignment_drill_driver_id:
+        description: "Driver ID used for assignment drill"
+        required: true
+        default: "99991"
+        type: string
+
+jobs:
+  ops-assignment-sync-drill:
+    name: Run Ops Assignment Sync Drill (T-008-03)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CORE_API_BASE_URL: ${{ secrets.CORE_API_BASE_URL }}
+      CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CORE_API_ADMIN_ROLE: "ADMIN"
+      OPS_ASSIGNMENT_DRILL_DRIVER_ID: ${{ inputs.ops_assignment_drill_driver_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "$CORE_API_BASE_URL" ]; then
+            echo "Missing CORE_API_BASE_URL secret"
+            exit 1
+          fi
+          if [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ops assignment sync drill
+        run: pnpm --filter bst-admin drill:ops-assignment-sync
+
+      - name: Upload ops assignment sync reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-assignment-sync-drill-reports
+          if-no-files-found: warn
+          path: reports/gates/ops-assignment-sync/**

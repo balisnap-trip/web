@@ -30,7 +30,7 @@ Status legend:
 | D-08 | P1 | Scope hard-cut vs deprecation | hard-cut hanya internal non-versioned; public API versioned pakai deprecation | Owner + Tech Lead | 2026-02-20 | LOCKED |
 | D-09 | P1 | `package_id` polymorphic safety | wajib `packageRefType` + `packageRefKey`; sunset 2026-09-30 | Owner + Product | 2026-02-21 | LOCKED |
 | D-10 | P1 | Monorepo tooling lock | pnpm + Turborepo + Changesets | Tech Lead | 2026-02-19 | LOCKED |
-| D-11 | P1 | Deployment topology path lock | staging `/home/bonk/stagging-bst`, core-api prod `/home/bonk/backend/core-api-prod`, no `masterbst` alias | DevOps + Tech Lead | 2026-02-20 | LOCKED |
+| D-11 | P1 | Deployment topology path lock | staging `/home/bonk/stagging-bst`, core-api prod `/home/bonk/backend/core-api-prod`, tanpa alias path staging lama | DevOps + Tech Lead | 2026-02-20 | LOCKED |
 
 ## 2. Dampak Jika Tidak Lock
 

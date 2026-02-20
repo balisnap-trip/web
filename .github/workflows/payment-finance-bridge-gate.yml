@@ -1,0 +1,73 @@
+name: Payment Finance Bridge Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase2_batch_code:
+        description: "Batch code report gate (default E)"
+        required: true
+        default: "E"
+        type: string
+      gate_payment_max_ops_done_not_paid_ratio_percent:
+        description: "Max ops=DONE with payment!=PAID ratio percent (E-02)"
+        required: true
+        default: "0.3"
+        type: string
+      gate_payment_direct_sample_size:
+        description: "Sample size direct payment audit (E-03)"
+        required: true
+        default: "25"
+        type: string
+
+jobs:
+  payment-finance-bridge-gate:
+    name: Run Payment Finance Bridge Gate (E-01/E-02/E-03)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OPS_DB_URL: ${{ secrets.OPS_DB_URL }}
+      BALISNAP_DB_URL: ${{ secrets.BALISNAP_DB_URL }}
+      PHASE2_BATCH_CODE: ${{ inputs.phase2_batch_code }}
+      GATE_PAYMENT_MAX_OPS_DONE_NOT_PAID_RATIO_PERCENT: ${{ inputs.gate_payment_max_ops_done_not_paid_ratio_percent }}
+      GATE_PAYMENT_DIRECT_SAMPLE_SIZE: ${{ inputs.gate_payment_direct_sample_size }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate OPS_DB_URL secret
+        run: |
+          if [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run payment finance bridge gate
+        id: run_gate
+        run: pnpm --filter @bst/core-api gate:payment-finance-bridge
+        continue-on-error: true
+
+      - name: Upload payment finance gate reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-finance-bridge-gate-reports
+          if-no-files-found: warn
+          path: reports/gates/payment-finance/**
+
+      - name: Mark workflow failed when gate check fails
+        if: steps.run_gate.outcome != 'success'
+        run: exit 1

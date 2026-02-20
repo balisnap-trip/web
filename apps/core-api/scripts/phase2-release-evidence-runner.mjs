@@ -9,6 +9,13 @@ const __dirname = path.dirname(__filename);
 const batchCode = process.env.PHASE2_BATCH_CODE || "phase2";
 const runQualityCheck = readBoolean(process.env.RUN_EVIDENCE_QUALITY_CHECK, true);
 const runIngestGates = readBoolean(process.env.RUN_EVIDENCE_INGEST_GATES, true);
+const runIngestReplayDrill = readBoolean(process.env.RUN_EVIDENCE_INGEST_REPLAY_DRILL, false);
+const runIngestDuplicateGate = readBoolean(process.env.RUN_EVIDENCE_INGEST_DUPLICATE_GATE, false);
+const runIngestRetentionGate = readBoolean(process.env.RUN_EVIDENCE_INGEST_RETENTION_GATE, false);
+const runCatalogGate = readBoolean(process.env.RUN_EVIDENCE_CATALOG_GATE, false);
+const runBookingGate = readBoolean(process.env.RUN_EVIDENCE_BOOKING_GATE, false);
+const runPaymentGate = readBoolean(process.env.RUN_EVIDENCE_PAYMENT_GATE, false);
+const runCatalogPublishGate = readBoolean(process.env.RUN_EVIDENCE_CATALOG_PUBLISH_GATE, false);
 const reportRootDir = path.resolve(__dirname, `../../../reports/release-evidence/${batchCode}`);
 
 function readBoolean(rawValue, fallback) {
@@ -109,6 +116,16 @@ async function run() {
   const startedAt = new Date().toISOString();
   const steps = [];
 
+  if (process.env.RUN_GATE_REPLAY_DRILL === undefined) {
+    process.env.RUN_GATE_REPLAY_DRILL = runIngestReplayDrill ? "true" : "false";
+  }
+  if (process.env.RUN_GATE_DUPLICATE_DELIVERY === undefined) {
+    process.env.RUN_GATE_DUPLICATE_DELIVERY = runIngestDuplicateGate ? "true" : "false";
+  }
+  if (process.env.RUN_GATE_RETENTION_POLICY === undefined) {
+    process.env.RUN_GATE_RETENTION_POLICY = runIngestRetentionGate ? "true" : "false";
+  }
+
   if (runQualityCheck) {
     steps.push(
       runScript(
@@ -133,8 +150,58 @@ async function run() {
     );
   }
 
+  if (runCatalogGate) {
+    steps.push(
+      runScript(
+        "CATALOG_BRIDGE_GATE",
+        "catalog-bridge-gate.mjs",
+        "CATALOG_BRIDGE_GATE_RESULT",
+        "CATALOG_BRIDGE_GATE_JSON",
+        "CATALOG_BRIDGE_GATE_MD"
+      )
+    );
+  }
+
+  if (runBookingGate) {
+    steps.push(
+      runScript(
+        "BOOKING_BRIDGE_GATE",
+        "booking-bridge-gate.mjs",
+        "BOOKING_BRIDGE_GATE_RESULT",
+        "BOOKING_BRIDGE_GATE_JSON",
+        "BOOKING_BRIDGE_GATE_MD"
+      )
+    );
+  }
+
+  if (runPaymentGate) {
+    steps.push(
+      runScript(
+        "PAYMENT_FINANCE_BRIDGE_GATE",
+        "payment-finance-bridge-gate.mjs",
+        "PAYMENT_FINANCE_GATE_RESULT",
+        "PAYMENT_FINANCE_GATE_JSON",
+        "PAYMENT_FINANCE_GATE_MD"
+      )
+    );
+  }
+
+  if (runCatalogPublishGate) {
+    steps.push(
+      runScript(
+        "CATALOG_PUBLISH_WORKFLOW_GATE",
+        "catalog-publish-workflow-gate.mjs",
+        "GATE_RESULT",
+        "GATE_REPORT_JSON",
+        "GATE_REPORT_MD"
+      )
+    );
+  }
+
   if (steps.length === 0) {
-    throw new Error("No evidence stage selected. Enable RUN_EVIDENCE_QUALITY_CHECK and/or RUN_EVIDENCE_INGEST_GATES.");
+    throw new Error(
+      "No evidence stage selected. Enable RUN_EVIDENCE_QUALITY_CHECK and/or RUN_EVIDENCE_INGEST_GATES and/or RUN_EVIDENCE_CATALOG_GATE and/or RUN_EVIDENCE_BOOKING_GATE and/or RUN_EVIDENCE_PAYMENT_GATE and/or RUN_EVIDENCE_CATALOG_PUBLISH_GATE."
+    );
   }
 
   const failedSteps = steps.filter((step) => !step.passed);
@@ -145,7 +212,14 @@ async function run() {
     result: failedSteps.length === 0 ? "PASS" : "FAIL",
     config: {
       runQualityCheck,
-      runIngestGates
+      runIngestGates,
+      runIngestReplayDrill,
+      runIngestDuplicateGate,
+      runIngestRetentionGate,
+      runCatalogGate,
+      runBookingGate,
+      runPaymentGate,
+      runCatalogPublishGate
     },
     steps
   };

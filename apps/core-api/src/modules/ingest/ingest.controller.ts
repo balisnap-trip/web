@@ -88,11 +88,17 @@ export class IngestController {
           })
         : false;
 
+    let processedInline = false;
+    if (idempotentReplay === false && !queued && this.featureFlags.isSyncFallbackEnabled()) {
+      processedInline = await this.processInline(record.eventId, 1);
+    }
+
     return successEnvelope({
       eventId: record.eventId,
       processStatus: record.processStatus,
       idempotentReplay,
-      queued
+      queued,
+      processedInline
     });
   }
 
@@ -122,6 +128,10 @@ export class IngestController {
         reason: "REPLAY",
         attemptNumber: 1
       });
+      const processedInline =
+        !queued && this.featureFlags.isSyncFallbackEnabled()
+          ? await this.processInline(replayed.eventId, 1)
+          : false;
 
       this.auditService.record({
         eventType: "INGEST_REPLAY_REQUESTED",
@@ -129,13 +139,15 @@ export class IngestController {
         resourceType: "INGEST_EVENT",
         resourceId: replayed.eventId,
         metadata: {
-          queued
+          queued,
+          processedInline
         }
       });
 
       return successEnvelope({
         ...replayed,
-        queued
+        queued,
+        processedInline
       });
     } catch (error) {
       this.auditService.record({
@@ -206,5 +218,23 @@ export class IngestController {
       return error.message;
     }
     return "UNKNOWN_REPLAY_ERROR";
+  }
+
+  private async processInline(eventId: string, attemptNumber: number): Promise<boolean> {
+    await this.ingestService.markProcessingAttempt(eventId, attemptNumber);
+    try {
+      await this.ingestService.processEvent(eventId);
+      await this.ingestService.markReplaySucceeded(eventId);
+      return true;
+    } catch (error) {
+      const classification = this.ingestService.classifyProcessingError(error);
+      await this.ingestService.markEventFailed({
+        eventId,
+        reasonCode: classification.reasonCode,
+        reasonDetail: classification.message,
+        poisonMessage: true
+      });
+      throw error;
+    }
   }
 }

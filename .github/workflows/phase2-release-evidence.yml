@@ -18,6 +18,46 @@ on:
         required: true
         default: true
         type: boolean
+      run_evidence_ingest_replay_drill:
+        description: "Enable replay drill during ingest gate stage"
+        required: true
+        default: false
+        type: boolean
+      run_evidence_ingest_duplicate_gate:
+        description: "Enable duplicate delivery gate during ingest stage"
+        required: true
+        default: false
+        type: boolean
+      run_evidence_ingest_retention_gate:
+        description: "Enable retention policy gate during ingest stage"
+        required: true
+        default: false
+        type: boolean
+      run_evidence_catalog_gate:
+        description: "Run catalog bridge gate stage (Batch C)"
+        required: true
+        default: false
+        type: boolean
+      run_evidence_booking_gate:
+        description: "Run booking bridge gate stage (Batch D)"
+        required: true
+        default: false
+        type: boolean
+      run_evidence_payment_gate:
+        description: "Run payment finance bridge gate stage (Batch E)"
+        required: true
+        default: false
+        type: boolean
+      run_evidence_catalog_publish_gate:
+        description: "Run catalog publish workflow gate stage (EP-010)"
+        required: true
+        default: false
+        type: boolean
+      gate_catalog_publish_expect_signature_required:
+        description: "Expect signature enforcement on publish endpoints"
+        required: true
+        default: false
+        type: boolean
 
 jobs:
   phase2-release-evidence:
@@ -26,12 +66,24 @@ jobs:
     timeout-minutes: 220
     env:
       OPS_DB_URL: ${{ secrets.OPS_DB_URL }}
+      BALISNAP_DB_URL: ${{ secrets.BALISNAP_DB_URL }}
       CORE_API_BASE_URL: ${{ vars.CORE_API_BASE_URL }}
       CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CATALOG_PUBLISH_SECRET: ${{ secrets.CATALOG_PUBLISH_SECRET }}
+      INGEST_SERVICE_TOKEN: ${{ secrets.INGEST_SERVICE_TOKEN }}
+      INGEST_SERVICE_SECRET: ${{ secrets.INGEST_SERVICE_SECRET }}
       CORE_API_ADMIN_ROLE: ADMIN
       PHASE2_BATCH_CODE: ${{ inputs.phase2_batch_code }}
       RUN_EVIDENCE_QUALITY_CHECK: ${{ inputs.run_evidence_quality_check }}
       RUN_EVIDENCE_INGEST_GATES: ${{ inputs.run_evidence_ingest_gates }}
+      RUN_EVIDENCE_INGEST_REPLAY_DRILL: ${{ inputs.run_evidence_ingest_replay_drill }}
+      RUN_EVIDENCE_INGEST_DUPLICATE_GATE: ${{ inputs.run_evidence_ingest_duplicate_gate }}
+      RUN_EVIDENCE_INGEST_RETENTION_GATE: ${{ inputs.run_evidence_ingest_retention_gate }}
+      RUN_EVIDENCE_CATALOG_GATE: ${{ inputs.run_evidence_catalog_gate }}
+      RUN_EVIDENCE_BOOKING_GATE: ${{ inputs.run_evidence_booking_gate }}
+      RUN_EVIDENCE_PAYMENT_GATE: ${{ inputs.run_evidence_payment_gate }}
+      RUN_EVIDENCE_CATALOG_PUBLISH_GATE: ${{ inputs.run_evidence_catalog_publish_gate }}
+      GATE_CATALOG_PUBLISH_EXPECT_SIGNATURE_REQUIRED: ${{ inputs.gate_catalog_publish_expect_signature_required }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -53,12 +105,52 @@ jobs:
             echo "Missing OPS_DB_URL secret for quality check stage"
             exit 1
           fi
+          if [ "$RUN_EVIDENCE_CATALOG_GATE" = "true" ] && [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret for catalog gate stage"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_BOOKING_GATE" = "true" ] && [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret for booking gate stage"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_PAYMENT_GATE" = "true" ] && [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret for payment gate stage"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_CATALOG_PUBLISH_GATE" = "true" ] && [ -z "$CORE_API_BASE_URL" ]; then
+            echo "Missing CORE_API_BASE_URL repository variable for catalog publish gate stage"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_CATALOG_PUBLISH_GATE" = "true" ] && [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret for catalog publish gate stage"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_CATALOG_PUBLISH_GATE" = "true" ] && [ "$GATE_CATALOG_PUBLISH_EXPECT_SIGNATURE_REQUIRED" = "true" ] && [ -z "$CATALOG_PUBLISH_SECRET" ]; then
+            echo "Missing CATALOG_PUBLISH_SECRET secret for signature-required catalog publish gate"
+            exit 1
+          fi
           if [ "$RUN_EVIDENCE_INGEST_GATES" = "true" ] && [ -z "$CORE_API_BASE_URL" ]; then
             echo "Missing CORE_API_BASE_URL repository variable for ingest gate stage"
             exit 1
           fi
           if [ "$RUN_EVIDENCE_INGEST_GATES" = "true" ] && [ -z "$CORE_API_ADMIN_TOKEN" ]; then
             echo "Missing CORE_API_ADMIN_TOKEN secret for ingest gate stage"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_INGEST_GATES" = "true" ] && [ "$RUN_EVIDENCE_INGEST_DUPLICATE_GATE" = "true" ] && [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret for ingest duplicate gate"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_INGEST_GATES" = "true" ] && [ "$RUN_EVIDENCE_INGEST_RETENTION_GATE" = "true" ] && [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret for ingest retention gate"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_INGEST_GATES" = "true" ] && [ "$RUN_EVIDENCE_INGEST_REPLAY_DRILL" = "true" ] && [ -z "$INGEST_SERVICE_TOKEN" ]; then
+            echo "Missing INGEST_SERVICE_TOKEN secret for ingest replay drill"
+            exit 1
+          fi
+          if [ "$RUN_EVIDENCE_INGEST_GATES" = "true" ] && [ "$RUN_EVIDENCE_INGEST_REPLAY_DRILL" = "true" ] && [ -z "$INGEST_SERVICE_SECRET" ]; then
+            echo "Missing INGEST_SERVICE_SECRET secret for ingest replay drill"
             exit 1
           fi
 
@@ -79,4 +171,11 @@ jobs:
             reports/recon/quality/**
             reports/gates/ingest-processing/**
             reports/gates/ingest-dlq-growth/**
+            reports/gates/ingest-duplicate-delivery/**
+            reports/gates/ingest-retention-policy/**
+            reports/gates/ingest-replay-drill/**
             reports/gates/ingest-release/**
+            reports/gates/catalog-bridge/**
+            reports/gates/booking-bridge/**
+            reports/gates/payment-finance/**
+            reports/gates/catalog-publish-workflow/**

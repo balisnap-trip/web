@@ -1,0 +1,67 @@
+name: Public Web Continuity Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      public_web_base_url:
+        description: "Public web base URL target (contoh: https://balisnaptrip.com)"
+        required: true
+        type: string
+      public_web_tour_slug:
+        description: "Tour slug override (optional)"
+        required: false
+        default: ""
+        type: string
+      public_web_continuity_booking_id:
+        description: "Booking ID probe untuk halaman /booking/[id]"
+        required: true
+        default: "1"
+        type: string
+      public_web_continuity_timeout_ms:
+        description: "Timeout request per endpoint (ms)"
+        required: true
+        default: "15000"
+        type: string
+
+jobs:
+  public-web-continuity-gate:
+    name: Run Public Web Continuity Gate (T-009-05)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PUBLIC_WEB_BASE_URL: ${{ inputs.public_web_base_url }}
+      PUBLIC_WEB_TOUR_SLUG: ${{ inputs.public_web_tour_slug }}
+      PUBLIC_WEB_CONTINUITY_BOOKING_ID: ${{ inputs.public_web_continuity_booking_id }}
+      PUBLIC_WEB_CONTINUITY_TIMEOUT_MS: ${{ inputs.public_web_continuity_timeout_ms }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Validate base URL input
+        run: |
+          if [ -z "$PUBLIC_WEB_BASE_URL" ]; then
+            echo "Missing public_web_base_url input"
+            exit 1
+          fi
+
+      - name: Run public web continuity gate
+        id: run_gate
+        run: node balisnap/scripts/public-web-continuity-check.mjs
+        continue-on-error: true
+
+      - name: Upload continuity reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-continuity-gate-reports
+          if-no-files-found: warn
+          path: reports/gates/public-web-continuity/**
+
+      - name: Mark workflow failed when gate check fails
+        if: steps.run_gate.outcome != 'success'
+        run: exit 1

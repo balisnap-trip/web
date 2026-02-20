@@ -21,14 +21,17 @@ export class IngestMetricsController {
   @Get("queue")
   @ApiOperation({ summary: "Get ingest queue and dead-letter metrics" })
   async queue() {
-    const [queue, deadLetter] = await Promise.all([
+    const retryPolicy = this.ingestQueueService.getRetryPolicy();
+    const [queue, deadLetter, retry] = await Promise.all([
       this.ingestQueueService.getRuntimeMetrics(),
-      this.ingestService.getDeadLetterMetrics()
+      this.ingestService.getDeadLetterMetrics(),
+      this.ingestService.getRetryMetrics(retryPolicy)
     ]);
 
     return successEnvelope({
       queue,
-      deadLetter
+      deadLetter,
+      retry
     });
   }
 

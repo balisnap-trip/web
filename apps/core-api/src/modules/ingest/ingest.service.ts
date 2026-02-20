@@ -79,6 +79,26 @@ export interface IngestProcessingMetrics {
   };
 }
 
+export interface IngestRetryMetrics {
+  policy: {
+    maxAttempts: number;
+    retryDelaysSeconds: number[];
+  };
+  totals: {
+    pendingRetry: number;
+    dueRetry: number;
+    processingRetry: number;
+    queuedRetry: number;
+    exhausted: number;
+    withAttempt: number;
+  };
+  nextRetryAt: {
+    earliest: string | null;
+    latest: string | null;
+  };
+  attemptHistogram: Record<string, number>;
+}
+
 export interface IngestProcessingFailure {
   retryable: boolean;
   reasonCode: string;
@@ -136,6 +156,22 @@ interface IngestDeadLetterRow {
   channel_code: string;
   external_booking_ref: string;
   event_type: string;
+}
+
+interface IngestRetrySummaryRow {
+  pending_retry: number | string;
+  due_retry: number | string;
+  processing_retry: number | string;
+  queued_retry: number | string;
+  exhausted: number | string;
+  with_attempt: number | string;
+  earliest_next_retry_at: Date | string | null;
+  latest_next_retry_at: Date | string | null;
+}
+
+interface IngestRetryHistogramRow {
+  attempt_bucket: number | string;
+  count: number | string;
 }
 
 @Injectable()
@@ -847,6 +883,102 @@ export class IngestService {
     };
   }
 
+  async getRetryMetrics(input?: {
+    maxAttempts?: number;
+    retryDelaysMs?: number[];
+  }): Promise<IngestRetryMetrics> {
+    const maxAttempts = this.normalizeRetryMaxAttempts(input?.maxAttempts);
+    const retryDelaysMs = this.normalizeRetryDelaysMs(input?.retryDelaysMs);
+
+    const summaryResult = await this.databaseService.opsQuery<IngestRetrySummaryRow>(
+      `
+        select
+          count(*) filter (
+            where process_status = 'FAILED'
+              and next_retry_at is not null
+          )::int as pending_retry,
+          count(*) filter (
+            where process_status = 'FAILED'
+              and next_retry_at is not null
+              and next_retry_at <= now()
+          )::int as due_retry,
+          count(*) filter (
+            where process_status = 'PROCESSING'
+              and attempt_count > 1
+          )::int as processing_retry,
+          count(*) filter (
+            where process_status = 'RECEIVED'
+              and attempt_count > 1
+          )::int as queued_retry,
+          count(*) filter (
+            where process_status = 'FAILED'
+              and attempt_count >= $1
+              and next_retry_at is null
+          )::int as exhausted,
+          count(*) filter (
+            where attempt_count > 0
+          )::int as with_attempt,
+          min(next_retry_at) filter (where next_retry_at is not null) as earliest_next_retry_at,
+          max(next_retry_at) filter (where next_retry_at is not null) as latest_next_retry_at
+        from ingest_event_log
+      `,
+      [maxAttempts]
+    );
+
+    const histogramResult = await this.databaseService.opsQuery<IngestRetryHistogramRow>(
+      `
+        select
+          case
+            when attempt_count >= $1 then $1
+            else attempt_count
+          end as attempt_bucket,
+          count(*)::int as count
+        from ingest_event_log
+        where attempt_count > 0
+        group by attempt_bucket
+        order by attempt_bucket
+      `,
+      [maxAttempts]
+    );
+
+    const summary = summaryResult.rows[0];
+    const attemptHistogram: Record<string, number> = {};
+    for (const row of histogramResult.rows) {
+      const bucket = Number(row.attempt_bucket ?? 0);
+      const count = Number(row.count ?? 0);
+      if (bucket <= 0 || count <= 0) {
+        continue;
+      }
+
+      const key = bucket >= maxAttempts ? `>=${maxAttempts}` : String(bucket);
+      attemptHistogram[key] = (attemptHistogram[key] ?? 0) + count;
+    }
+
+    return {
+      policy: {
+        maxAttempts,
+        retryDelaysSeconds: retryDelaysMs.map((item) => Math.floor(item / 1_000))
+      },
+      totals: {
+        pendingRetry: Number(summary?.pending_retry ?? 0),
+        dueRetry: Number(summary?.due_retry ?? 0),
+        processingRetry: Number(summary?.processing_retry ?? 0),
+        queuedRetry: Number(summary?.queued_retry ?? 0),
+        exhausted: Number(summary?.exhausted ?? 0),
+        withAttempt: Number(summary?.with_attempt ?? 0)
+      },
+      nextRetryAt: {
+        earliest: summary?.earliest_next_retry_at
+          ? new Date(summary.earliest_next_retry_at).toISOString()
+          : null,
+        latest: summary?.latest_next_retry_at
+          ? new Date(summary.latest_next_retry_at).toISOString()
+          : null
+      },
+      attemptHistogram
+    };
+  }
+
   async updateDeadLetterStatus(input: {
     deadLetterKey: string;
     toStatus: IngestDeadLetterStatus;
@@ -1163,6 +1295,30 @@ export class IngestService {
       return 60;
     }
     return Math.min(Math.max(Math.floor(numeric), 1), 1_440);
+  }
+
+  private normalizeRetryMaxAttempts(value: number | undefined): number {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric < 1) {
+      return 5;
+    }
+    return Math.floor(numeric);
+  }
+
+  private normalizeRetryDelaysMs(value: number[] | undefined): number[] {
+    if (!Array.isArray(value) || value.length === 0) {
+      return [30_000, 120_000, 600_000, 1_800_000, 7_200_000];
+    }
+
+    const sanitized = value
+      .map((item) => Number(item))
+      .filter((item) => Number.isFinite(item) && item > 0)
+      .map((item) => Math.floor(item));
+
+    if (sanitized.length === 0) {
+      return [30_000, 120_000, 600_000, 1_800_000, 7_200_000];
+    }
+    return sanitized;
   }
 
   private rethrowIfIngestSchemaMissing(error: unknown) {

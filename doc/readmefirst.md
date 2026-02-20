@@ -72,7 +72,7 @@ Folder `doc/Plan A` dan `doc/Plan B` diperlakukan sebagai arsip referensi, bukan
 
 ## 4.1 Update Operasional Terkini (2026-02-20)
 
-1. Path staging aktif tunggal: `/home/bonk/stagging-bst` (tanpa alias `masterbst`).
+1. Path staging aktif tunggal: `/home/bonk/stagging-bst` (tanpa alias path staging lama).
 2. Path core-api production aktif: `/home/bonk/backend/core-api-prod`.
 3. Bootstrap env runtime core-api untuk key ingest/redis/admin token sudah selesai.
 4. `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` sudah sinkron di env emitter dan receiver.

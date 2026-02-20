@@ -1,6 +1,7 @@
 # UI/UX Standardization Spec (Admin + Content Manager, Public Web Continuity)
 
 Tanggal baseline: 2026-02-18  
+Update implementasi: 2026-02-20  
 Status: aktif (turunan langsung dari `ADR-011`)
 
 ## 1. Scope dan Tujuan
@@ -42,6 +43,22 @@ Fakta:
 1. Stack UI public: HeroUI + Tailwind + style custom existing.
 2. Font public sudah ditetapkan (`Figtree`, `Fira Code`) dan sudah jadi identitas tampilan.
 3. Layout public (`Navbar`, `Footer`, section composition) sudah berjalan dan tidak boleh dirombak total pada fase ini.
+
+### 2.3 Content Manager (`apps/content-manager`)
+
+Referensi code:
+1. `apps/content-manager/package.json`
+2. `apps/content-manager/src/app/globals.css`
+3. `apps/content-manager/src/components/ui/*`
+4. `apps/content-manager/src/lib/auth.ts`
+5. `apps/content-manager/src/middleware.ts`
+
+Fakta:
+1. Scaffold EP-010 aktif dengan login credentials + RBAC (`CM_ALLOWED_ROLES`).
+2. Route `/dashboard` sudah diproteksi middleware + role check server-side.
+3. Baseline UI internal mengadopsi token CSS + primitive admin (`Button`, `Input`, `Card`, `Label`).
+4. `Catalog editor` CRUD aktif di route `/catalog`, `/catalog/new`, `/catalog/[itemId]`.
+5. Workflow publish aktif di route `/publish` dengan state `draft -> in_review -> published -> failed/retry`.
 
 ## 3. Keputusan Implementasi
 

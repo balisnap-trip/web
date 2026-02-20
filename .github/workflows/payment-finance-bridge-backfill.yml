@@ -1,0 +1,64 @@
+name: Payment Finance Bridge Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase2_batch_code:
+        description: "Batch code report (default E)"
+        required: true
+        default: "E"
+        type: string
+      payment_backfill_dry_run:
+        description: "Run without writing to target tables"
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  payment-finance-bridge-backfill:
+    name: Run Payment Finance Bridge Backfill
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      OPS_DB_URL: ${{ secrets.OPS_DB_URL }}
+      BALISNAP_DB_URL: ${{ secrets.BALISNAP_DB_URL }}
+      BSTADMIN_DB_URL: ${{ secrets.BSTADMIN_DB_URL }}
+      PHASE2_BATCH_CODE: ${{ inputs.phase2_batch_code }}
+      PAYMENT_BACKFILL_DRY_RUN: ${{ inputs.payment_backfill_dry_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate OPS_DB_URL secret
+        run: |
+          if [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run payment finance bridge backfill
+        run: pnpm --filter @bst/core-api backfill:payment-finance-bridge
+
+      - name: Upload payment finance bridge reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: payment-finance-bridge-backfill-reports
+          if-no-files-found: warn
+          path: |
+            reports/recon/**/*-payment-finance-bridge-backfill.json
+            reports/recon/**/*-payment-finance-bridge-backfill.md

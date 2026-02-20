@@ -289,7 +289,7 @@ Tanggal update: 2026-02-20.
 1. Keputusan:
    1. path staging resmi: `/home/bonk/stagging-bst`,
    2. path production core-api resmi: `/home/bonk/backend/core-api-prod`,
-   3. `/home/bonk/masterbst` tidak dipakai lagi sebagai alias/symlink.
+   3. alias path staging lama tidak dipakai lagi sebagai alias/symlink.
 2. Aturan:
    1. release layout wajib `releases + current + shared + logs`,
    2. `.env` core-api production wajib di `/home/bonk/backend/core-api-prod/shared/.env`,

@@ -16,22 +16,22 @@ export class BookingController {
 
   @Get()
   @ApiOperation({ summary: "List ops bookings" })
-  list() {
-    return successEnvelope(this.bookingService.list());
+  async list() {
+    return successEnvelope(await this.bookingService.list());
   }
 
   @Get(":id")
   @ApiOperation({ summary: "Get ops booking detail" })
   @ApiParam({ name: "id", example: "book_demo_001" })
-  get(@Param("id") id: string) {
-    return successEnvelope(this.bookingService.get(id));
+  async get(@Param("id") id: string) {
+    return successEnvelope(await this.bookingService.get(id));
   }
 
   @Patch(":id")
   @ApiOperation({ summary: "Patch editable booking fields" })
   @ApiParam({ name: "id", example: "book_demo_001" })
   @RequireAdminRoles("ADMIN", "MANAGER")
-  patch(
+  async patch(
     @Param("id") id: string,
     @Body()
     body: {
@@ -41,33 +41,33 @@ export class BookingController {
       packageRefKey?: string;
     }
   ) {
-    return successEnvelope(this.bookingService.patch(id, body));
+    return successEnvelope(await this.bookingService.patch(id, body));
   }
 
   @Post(":id/assign")
   @ApiOperation({ summary: "Assign driver to booking" })
   @ApiParam({ name: "id", example: "book_demo_001" })
   @RequireAdminRoles("ADMIN", "MANAGER")
-  assign(
+  async assign(
     @Param("id") id: string,
     @Body() body: { driverId: number }
   ) {
-    return successEnvelope(this.bookingService.assign(id, body.driverId));
+    return successEnvelope(await this.bookingService.assign(id, body.driverId));
   }
 
   @Post(":id/unassign")
   @ApiOperation({ summary: "Unassign driver from booking" })
   @ApiParam({ name: "id", example: "book_demo_001" })
   @RequireAdminRoles("ADMIN", "MANAGER")
-  unassign(@Param("id") id: string) {
-    return successEnvelope(this.bookingService.unassign(id));
+  async unassign(@Param("id") id: string) {
+    return successEnvelope(await this.bookingService.unassign(id));
   }
 
   @Post(":id/status/sync")
   @ApiOperation({ summary: "Recompute booking fulfillment status" })
   @ApiParam({ name: "id", example: "book_demo_001" })
   @RequireAdminRoles("ADMIN", "MANAGER")
-  syncStatus(@Param("id") id: string) {
-    return successEnvelope(this.bookingService.syncStatus(id));
+  async syncStatus(@Param("id") id: string) {
+    return successEnvelope(await this.bookingService.syncStatus(id));
   }
 }

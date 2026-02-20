@@ -2,10 +2,11 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
+import { resolveOpsDbUrl } from "./_legacy-db-env.mjs";
 
 const { Client } = pg;
 
-const connectionString = process.env.OPS_DB_URL || "";
+const connectionString = resolveOpsDbUrl(process.env);
 const batchCode = process.env.PHASE2_BATCH_CODE || "phase2";
 const opsDoneNotPaidMaxRatio = readNumber("QUALITY_MAX_OPS_DONE_NOT_PAID_RATIO", 0.01, 0);
 const unmappedRatioMaxPercent = readNumber("QUALITY_MAX_UNMAPPED_RATIO_PERCENT", 5, 0);
@@ -200,7 +201,7 @@ async function queryMetrics(client) {
 
 async function run() {
   if (!connectionString) {
-    throw new Error("Missing OPS_DB_URL environment variable");
+    throw new Error("Missing OPS_DB_URL environment variable (or legacy DATABASE_URL)");
   }
 
   const startedAt = new Date().toISOString();

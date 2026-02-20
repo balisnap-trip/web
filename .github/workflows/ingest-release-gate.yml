@@ -17,6 +17,26 @@ on:
         required: true
         default: true
         type: boolean
+      run_gate_duplicate_delivery:
+        description: "Run F-04 duplicate delivery gate"
+        required: true
+        default: false
+        type: boolean
+      run_gate_retention_policy:
+        description: "Run F-05 retention policy gate"
+        required: true
+        default: false
+        type: boolean
+      run_gate_replay_drill:
+        description: "Run replay drill (T-007-04)"
+        required: true
+        default: false
+        type: boolean
+      ingest_replay_drill_actor:
+        description: "Actor label for replay drill audit assertion"
+        required: true
+        default: "ci-ingest-replay-drill"
+        type: string
       gate_processing_window_minutes:
         description: "Processing window minutes"
         required: true
@@ -71,9 +91,16 @@ jobs:
     env:
       CORE_API_BASE_URL: ${{ inputs.core_api_base_url }}
       CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      OPS_DB_URL: ${{ secrets.OPS_DB_URL }}
+      INGEST_SERVICE_TOKEN: ${{ secrets.INGEST_SERVICE_TOKEN }}
+      INGEST_SERVICE_SECRET: ${{ secrets.INGEST_SERVICE_SECRET }}
       CORE_API_ADMIN_ROLE: ADMIN
       RUN_GATE_PROCESSING: ${{ inputs.run_gate_processing }}
       RUN_GATE_DLQ_GROWTH: ${{ inputs.run_gate_dlq_growth }}
+      RUN_GATE_DUPLICATE_DELIVERY: ${{ inputs.run_gate_duplicate_delivery }}
+      RUN_GATE_RETENTION_POLICY: ${{ inputs.run_gate_retention_policy }}
+      RUN_GATE_REPLAY_DRILL: ${{ inputs.run_gate_replay_drill }}
+      INGEST_REPLAY_DRILL_ACTOR: ${{ inputs.ingest_replay_drill_actor }}
       GATE_PROCESSING_WINDOW_MINUTES: ${{ inputs.gate_processing_window_minutes }}
       GATE_PROCESSING_MIN_SUCCESS_RATE: ${{ inputs.gate_processing_min_success_rate }}
       GATE_PROCESSING_MAX_MEDIAN_MS: ${{ inputs.gate_processing_max_median_ms }}
@@ -107,6 +134,22 @@ jobs:
             echo "Missing CORE_API_ADMIN_TOKEN secret"
             exit 1
           fi
+          if [ "$RUN_GATE_DUPLICATE_DELIVERY" = "true" ] && [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret for duplicate delivery gate"
+            exit 1
+          fi
+          if [ "$RUN_GATE_RETENTION_POLICY" = "true" ] && [ -z "$OPS_DB_URL" ]; then
+            echo "Missing OPS_DB_URL secret for retention policy gate"
+            exit 1
+          fi
+          if [ "$RUN_GATE_REPLAY_DRILL" = "true" ] && [ -z "$INGEST_SERVICE_TOKEN" ]; then
+            echo "Missing INGEST_SERVICE_TOKEN secret for replay drill"
+            exit 1
+          fi
+          if [ "$RUN_GATE_REPLAY_DRILL" = "true" ] && [ -z "$INGEST_SERVICE_SECRET" ]; then
+            echo "Missing INGEST_SERVICE_SECRET secret for replay drill"
+            exit 1
+          fi
 
       - name: Run ingest release gate
         id: run_gates
@@ -122,6 +165,9 @@ jobs:
           path: |
             reports/gates/ingest-processing/**
             reports/gates/ingest-dlq-growth/**
+            reports/gates/ingest-duplicate-delivery/**
+            reports/gates/ingest-retention-policy/**
+            reports/gates/ingest-replay-drill/**
             reports/gates/ingest-release/**
 
       - name: Mark workflow failed when gate check fails

@@ -24,7 +24,7 @@ Status: aktif
 ## 3. Aturan Path
 
 1. Path staging resmi hanya `/home/bonk/stagging-bst`.
-2. `/home/bonk/masterbst` tidak dipakai lagi sebagai alias/symlink.
+2. Alias path staging lama tidak dipakai lagi sebagai alias/symlink.
 3. Struktur release per target wajib:
    1. `{base}/releases/{release_id}`
    2. `{base}/current` (symlink aktif)
@@ -51,6 +51,11 @@ Status: aktif
    10. `pnpm deploy:core-api-prod:redis:start`
    11. `pnpm deploy:core-api-prod:redis:stop`
    12. `pnpm deploy:core-api-prod:redis:restart`
+3. Content manager production:
+   1. `pnpm deploy:content-manager-prod`
+   2. `pnpm deploy:content-manager-prod:build` (install all workspace deps + build scoped `@bst/content-manager`)
+   3. `pnpm deploy:content-manager-prod:list`
+   4. `pnpm deploy:content-manager-prod:rollback -- --release-id <RELEASE_ID>`
 
 ## 5. Kebijakan `.env`
 
@@ -83,13 +88,14 @@ Status: aktif
 1. Lock path runtime sudah diterapkan:
    1. staging: `/home/bonk/stagging-bst`,
    2. core-api prod: `/home/bonk/backend/core-api-prod`,
-   3. `masterbst` tidak dipakai sebagai symlink compatibility.
+   3. alias path staging lama tidak dipakai sebagai symlink compatibility.
 2. Bootstrap env core-api production sudah dilakukan pada `/home/bonk/backend/core-api-prod/shared/.env`.
 3. Key `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` sudah disinkronkan ke:
    1. `/home/bonk/balisnaptrip/.env`,
    2. `/home/bonk/stagging-bst/current/balisnap/.env`.
 4. Backup `.env` sudah dibuat sebelum update untuk semua path yang disentuh.
 5. Nilai secret tidak dicatat di dokumen; validasi dilakukan melalui runtime file dan jalur secret operasional.
+6. Implementasi EP-010 di `apps/content-manager` sudah mencakup `login + RBAC + catalog CRUD + publish workflow`; path production tetap `reserved` sampai smoke staging endpoint publish lulus.
 
 ## 8. Pending Verification
 

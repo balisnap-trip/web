@@ -7,7 +7,10 @@
     "migrate:deploy": "prisma migrate deploy",
     "build": "prisma generate && next build && next-sitemap",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "smoke:core-ingest-emitter": "node scripts/core-ingest-emitter-smoke.mjs",
+    "drill:core-ingest-orders-flow": "node scripts/core-ingest-orders-flow-drill.mjs",
+    "gate:public-web-continuity": "node scripts/public-web-continuity-check.mjs"
   },
   "dependencies": {
     "@auth/core": "^0.34.2",

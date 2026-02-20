@@ -4,6 +4,7 @@ import { createHash, randomUUID } from "crypto";
 import path from "path";
 import { fileURLToPath } from "url";
 import pg from "pg";
+import { resolveOpsDbUrl } from "./_legacy-db-env.mjs";
 
 const { Client } = pg;
 
@@ -316,9 +317,9 @@ async function run() {
     return;
   }
 
-  const connectionString = process.env.OPS_DB_URL;
+  const connectionString = resolveOpsDbUrl(process.env);
   if (!connectionString) {
-    throw new Error("Missing OPS_DB_URL environment variable");
+    throw new Error("Missing OPS_DB_URL environment variable (or legacy DATABASE_URL)");
   }
 
   const client = new Client({ connectionString });

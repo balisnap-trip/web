@@ -1,0 +1,83 @@
+name: Ops Read Parity Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      ops_read_parity_sample_limit:
+        description: "Legacy sample size for list parity"
+        required: true
+        default: "200"
+        type: string
+      ops_read_detail_sample_size:
+        description: "Detail sample size for critical-field check"
+        required: true
+        default: "50"
+        type: string
+      ops_read_parity_max_mismatch_ratio:
+        description: "Max parity mismatch ratio (0.01 = 1%)"
+        required: true
+        default: "0.01"
+        type: string
+      ops_read_parity_min_matched_rows:
+        description: "Minimum rows matched by booking ref"
+        required: true
+        default: "50"
+        type: string
+
+jobs:
+  ops-read-parity-gate:
+    name: Run Ops Read Parity Gate (BG-01)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: ${{ secrets.BSTADMIN_DATABASE_URL }}
+      CORE_API_BASE_URL: ${{ secrets.CORE_API_BASE_URL }}
+      CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CORE_API_ADMIN_ROLE: "ADMIN"
+      OPS_READ_PARITY_SAMPLE_LIMIT: ${{ inputs.ops_read_parity_sample_limit }}
+      OPS_READ_DETAIL_SAMPLE_SIZE: ${{ inputs.ops_read_detail_sample_size }}
+      OPS_READ_PARITY_MAX_MISMATCH_RATIO: ${{ inputs.ops_read_parity_max_mismatch_ratio }}
+      OPS_READ_PARITY_MIN_MATCHED_ROWS: ${{ inputs.ops_read_parity_min_matched_rows }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Missing BSTADMIN_DATABASE_URL secret"
+            exit 1
+          fi
+          if [ -z "$CORE_API_BASE_URL" ]; then
+            echo "Missing CORE_API_BASE_URL secret"
+            exit 1
+          fi
+          if [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ops read parity gate
+        run: pnpm --filter bst-admin gate:ops-read-parity
+
+      - name: Upload ops read parity reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ops-read-parity-gate-reports
+          if-no-files-found: warn
+          path: reports/gates/ops-read-parity/**

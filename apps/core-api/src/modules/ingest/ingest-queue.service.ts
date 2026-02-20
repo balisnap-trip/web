@@ -9,6 +9,11 @@ interface IngestJobPayload {
   reason: "INGEST_RECEIVED" | "REPLAY" | "RETRY";
 }
 
+export interface IngestRetryPolicySnapshot {
+  maxAttempts: number;
+  retryDelaysMs: number[];
+}
+
 export interface IngestQueueRuntimeMetrics {
   queueName: string;
   enabled: boolean;
@@ -164,6 +169,13 @@ export class IngestQueueService implements OnModuleInit, OnModuleDestroy {
         lastError: message
       };
     }
+  }
+
+  getRetryPolicy(): IngestRetryPolicySnapshot {
+    return {
+      maxAttempts: this.maxAttempts,
+      retryDelaysMs: [...this.retryDelaysMs]
+    };
   }
 
   private async handleJob(job: Job<IngestJobPayload>) {

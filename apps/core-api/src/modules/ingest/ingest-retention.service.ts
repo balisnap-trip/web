@@ -21,7 +21,7 @@ export class IngestRetentionService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!this.databaseService.isOpsConfigured()) {
-      this.logger.warn("Retention cleanup enabled but OPS_DB_URL is missing");
+      this.logger.warn("Retention cleanup enabled but OPS_DB_URL (or legacy DATABASE_URL) is missing");
       return;
     }
 

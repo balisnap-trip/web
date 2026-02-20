@@ -21,6 +21,8 @@
     "convert:sales": "tsx scripts/convert-sales-to-json.ts",
     "check:db": "tsx scripts/check-database-status.ts",
     "db:sync:from-server": "node scripts/sync-db-from-server.mjs",
+    "gate:ops-read-parity": "node scripts/ops-read-parity-gate.mjs",
+    "drill:ops-assignment-sync": "node scripts/ops-assignment-sync-drill.mjs",
     "gate:write-cutover": "node scripts/write-cutover-mismatch-gate.mjs",
     "check:users": "tsx scripts/check-users.ts",
     "reset:errors": "tsx scripts/reset-booking-email-errors.ts",

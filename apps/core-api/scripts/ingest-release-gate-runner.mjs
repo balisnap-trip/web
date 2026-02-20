@@ -10,6 +10,9 @@ const reportRootDir = path.resolve(__dirname, "../../../reports/gates/ingest-rel
 
 const runProcessingGate = readBoolean(process.env.RUN_GATE_PROCESSING, true);
 const runDlqGrowthGate = readBoolean(process.env.RUN_GATE_DLQ_GROWTH, true);
+const runDuplicateDeliveryGate = readBoolean(process.env.RUN_GATE_DUPLICATE_DELIVERY, false);
+const runRetentionPolicyGate = readBoolean(process.env.RUN_GATE_RETENTION_POLICY, false);
+const runReplayDrillGate = readBoolean(process.env.RUN_GATE_REPLAY_DRILL, false);
 
 function readBoolean(raw, fallback) {
   if (raw === undefined) {
@@ -123,6 +126,29 @@ function summarizeGate(gate) {
     return `dlqGrowthPerHour=${growthPerHour}, queueWaitingMax=${queueWaitingMax}, fetchErrors=${fetchErrors}`;
   }
 
+  if (gate.name === "T-007-04_REPLAY_DRILL") {
+    const replayQueued = formatMetric(summary.replayQueued);
+    const replayProcessedInline = formatMetric(summary.replayProcessedInline);
+    const finalDlqStatus = formatMetric(summary.finalDeadLetterStatus);
+    const finalEventStatus = formatMetric(summary.finalEventProcessStatus);
+    const auditValidated = formatMetric(summary.auditEventsValidated);
+    return `replayQueued=${replayQueued}, replayProcessedInline=${replayProcessedInline}, deadLetterStatus=${finalDlqStatus}, eventStatus=${finalEventStatus}, auditValidated=${auditValidated}`;
+  }
+
+  if (gate.name === "F-04_DUPLICATE_DELIVERY") {
+    const idemExcess = formatMetric(summary.idempotencyDuplicateExcessRows);
+    const secondaryExcess = formatMetric(summary.secondaryDuplicateExcessRows);
+    const bookingExcess = formatMetric(summary.bookingIdentityDuplicateExcessRows);
+    return `idempotencyExcess=${idemExcess}, secondaryExcess=${secondaryExcess}, bookingIdentityExcess=${bookingExcess}`;
+  }
+
+  if (gate.name === "F-05_RETENTION_POLICY_ACTIVE") {
+    const retentionEnabled = formatMetric(summary.retentionEnabled);
+    const staleDlq = formatMetric(summary.staleDlqRows);
+    const staleIngest = formatMetric(summary.staleIngestRows);
+    return `retentionEnabled=${retentionEnabled}, staleDlqRows=${staleDlq}, staleIngestRows=${staleIngest}`;
+  }
+
   const keys = Object.keys(summary).slice(0, 4);
   if (keys.length === 0) {
     return "n/a";
@@ -188,9 +214,20 @@ async function run() {
   if (runDlqGrowthGate) {
     gates.push(runGate("F-03_DLQ_GROWTH_AFTER_PEAK", "ingest-dlq-growth-gate.mjs"));
   }
+  if (runDuplicateDeliveryGate) {
+    gates.push(runGate("F-04_DUPLICATE_DELIVERY", "ingest-duplicate-delivery-gate.mjs"));
+  }
+  if (runRetentionPolicyGate) {
+    gates.push(runGate("F-05_RETENTION_POLICY_ACTIVE", "ingest-retention-policy-gate.mjs"));
+  }
+  if (runReplayDrillGate) {
+    gates.push(runGate("T-007-04_REPLAY_DRILL", "ingest-replay-drill.mjs"));
+  }
 
   if (gates.length === 0) {
-    throw new Error("No gate selected. Enable RUN_GATE_PROCESSING and/or RUN_GATE_DLQ_GROWTH.");
+    throw new Error(
+      "No gate selected. Enable RUN_GATE_PROCESSING and/or RUN_GATE_DLQ_GROWTH and/or RUN_GATE_DUPLICATE_DELIVERY and/or RUN_GATE_RETENTION_POLICY and/or RUN_GATE_REPLAY_DRILL."
+    );
   }
 
   const failedGates = gates.filter((gate) => !gate.passed);
@@ -200,7 +237,10 @@ async function run() {
     result: failedGates.length === 0 ? "PASS" : "FAIL",
     config: {
       runProcessingGate,
-      runDlqGrowthGate
+      runDlqGrowthGate,
+      runDuplicateDeliveryGate,
+      runRetentionPolicyGate,
+      runReplayDrillGate
     },
     gates
   };

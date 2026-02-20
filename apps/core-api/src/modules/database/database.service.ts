@@ -20,8 +20,8 @@ export class DatabaseService implements OnModuleDestroy {
   private readonly channelPool: Pool | null;
 
   constructor() {
-    this.opsPool = this.createPool(process.env.OPS_DB_URL);
-    this.channelPool = this.createPool(process.env.CHANNEL_DB_URL);
+    this.opsPool = this.createPool(process.env.OPS_DB_URL || process.env.DATABASE_URL);
+    this.channelPool = this.createPool(process.env.CHANNEL_DB_URL || process.env.SYNC_DATABASE_URL);
   }
 
   async onModuleDestroy() {

@@ -186,7 +186,11 @@ async function run() {
     headers: adminHeaders
   });
   assertStatus(metricsResponse.status, 200, "Ingest metrics endpoint failed", metricsResponse.json);
-  if (!metricsResponse.json?.data?.queue || !metricsResponse.json?.data?.deadLetter) {
+  if (
+    !metricsResponse.json?.data?.queue ||
+    !metricsResponse.json?.data?.deadLetter ||
+    !metricsResponse.json?.data?.retry?.totals
+  ) {
     throw new Error("Invalid ingest metrics payload");
   }
 
