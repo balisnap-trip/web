@@ -12,6 +12,7 @@ if (process.env.NODE_ENV === 'production' && cronSecret === DEFAULT_CRON_SECRET)
 }
 
 const POLL_INTERVAL_MS = 60 * 1000 // check every minute
+const INITIAL_DELAY_MS = Number(process.env.CRON_INITIAL_DELAY_MS || 10_000)
 
 async function runCron() {
   try {
@@ -39,10 +40,13 @@ function start() {
   console.log('Balisnaptrip Cron Runner Started')
   console.log(`Base URL: ${baseUrl}`)
   console.log(`Poll interval: ${POLL_INTERVAL_MS / 1000}s`)
+  console.log(`Initial delay: ${INITIAL_DELAY_MS / 1000}s`)
   console.log('='.repeat(60))
 
-  runCron()
-  setInterval(runCron, POLL_INTERVAL_MS)
+  setTimeout(() => {
+    runCron()
+    setInterval(runCron, POLL_INTERVAL_MS)
+  }, INITIAL_DELAY_MS)
 }
 
 start()

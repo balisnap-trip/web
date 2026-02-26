@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DriverStatusBadge } from '@/components/ui/driver-status-badge'
 import {
   Dialog,
   DialogContent,
@@ -35,13 +36,6 @@ interface DriverDetail {
   totalAssignmentCount: number
   priorityLevel: number | null
   createdAt: Date
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  AVAILABLE: 'bg-green-100 text-green-800',
-  BUSY: 'bg-yellow-100 text-yellow-800',
-  OFF_DUTY: 'bg-gray-100 text-gray-800',
-  INACTIVE: 'bg-red-100 text-red-800',
 }
 
 export default function DriverDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -216,10 +210,8 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
           </div>
           <div className="flex-1">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-gray-900">{driver.name}</h2>
-              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${STATUS_COLORS[driver.status]}`}>
-                {driver.status}
-              </span>
+              <h2 className="text-lg font-semibold text-gray-900">{driver.name}</h2>
+              <DriverStatusBadge status={driver.status} label={driver.status} />
               {driver.priorityLevel && (
                 <span className="text-xs bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-semibold">
                   P{driver.priorityLevel}

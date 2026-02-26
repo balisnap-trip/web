@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { FormField } from '@/components/ui/form-field'
 import { ModuleTabs } from '@/components/layout/module-tabs'
 import {
   Dialog,
@@ -15,17 +16,25 @@ import {
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Select } from '@/components/ui/select'
+import { SourceBadge } from '@/components/ui/source-badge'
+import { StatusBadge } from '@/components/ui/status-badge'
+import {
+  DataTableShell,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import {
   Search,
   Filter,
   Calendar,
   User,
   Users,
-  MapPin,
   DollarSign,
   CheckCircle,
-  XCircle,
-  Clock,
   AlertCircle,
   Eye,
   Car,
@@ -60,26 +69,6 @@ interface Booking {
   } | null
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  NEW: 'bg-slate-100 text-slate-800',
-  READY: 'bg-blue-100 text-blue-800',
-  ATTENTION: 'bg-amber-100 text-amber-800',
-  UPDATED: 'bg-indigo-100 text-indigo-800',
-  COMPLETED: 'bg-green-100 text-green-800',
-  DONE: 'bg-emerald-100 text-emerald-800',
-  CANCELLED: 'bg-red-100 text-red-800',
-  NO_SHOW: 'bg-gray-100 text-gray-800',
-}
-
-const SOURCE_COLORS: Record<string, string> = {
-  GYG: 'bg-indigo-100 text-indigo-800',
-  VIATOR: 'bg-green-100 text-green-800',
-  TRIPDOTCOM: 'bg-amber-100 text-amber-800',
-  BOKUN: 'bg-purple-100 text-purple-800',
-  DIRECT: 'bg-cyan-100 text-cyan-800',
-  MANUAL: 'bg-gray-100 text-gray-800',
-}
-
 export default function BookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [filteredBookings, setFilteredBookings] = useState<Booking[]>([])
@@ -100,8 +89,6 @@ export default function BookingsPage() {
   const getActiveCount = () => bookings.length - getDoneCount()
   const getUnassignedCount = () =>
     bookings.filter(b => !b.assignedDriverId && ['NEW', 'UPDATED', 'ATTENTION'].includes(b.status)).length
-  const getUpcomingCount = () =>
-    bookings.filter(b => isUpcoming(b.tourDate)).length
 
   const cleanGuestName = (name: string) => {
     const trimmed = name.trim()
@@ -291,21 +278,6 @@ export default function BookingsPage() {
     setFilteredBookings(filtered)
   }
 
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'NEW': return <Clock className="h-4 w-4" />
-      case 'READY': return <Clock className="h-4 w-4" />
-      case 'ATTENTION': return <AlertCircle className="h-4 w-4" />
-      case 'UPDATED': return <RefreshCw className="h-4 w-4" />
-      case 'COMPLETED': return <CheckCircle className="h-4 w-4" />
-      case 'DONE': return <CheckCircle className="h-4 w-4" />
-      case 'CANCELLED': return <XCircle className="h-4 w-4" />
-      case 'NO_SHOW': return <AlertCircle className="h-4 w-4" />
-      default: return <Clock className="h-4 w-4" />
-    }
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -479,206 +451,184 @@ export default function BookingsPage() {
 
       <Card className="p-4 hover:shadow-md transition-shadow duration-200">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              type="text"
-              placeholder="Search by name, ref, or email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4"
-            />
-          </div>
+          <FormField label="Search" className="space-y-0.5" labelClassName="text-xs text-gray-500">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 transform text-gray-400" />
+              <Input
+                type="text"
+                placeholder="Search by name, ref, or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-4"
+              />
+            </div>
+          </FormField>
 
-          {/* Status Filter */}
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4"
-          >
-            <option value="ALL">All Status</option>
-            <option value="NEW">New</option>
-            <option value="READY">Ready</option>
-            <option value="ATTENTION">Attention</option>
-            <option value="UPDATED">Updated</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="DONE">Done</option>
-            <option value="CANCELLED">Cancelled</option>
-            <option value="NO_SHOW">No Show</option>
-          </Select>
+          <FormField label="Status" className="space-y-0.5" labelClassName="text-xs text-gray-500">
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-4"
+            >
+              <option value="ALL">All Status</option>
+              <option value="NEW">New</option>
+              <option value="READY">Ready</option>
+              <option value="ATTENTION">Attention</option>
+              <option value="UPDATED">Updated</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="DONE">Done</option>
+              <option value="CANCELLED">Cancelled</option>
+              <option value="NO_SHOW">No Show</option>
+            </Select>
+          </FormField>
 
-          {/* Source Filter */}
-          <Select
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            className="px-4"
-          >
-            <option value="ALL">All Sources</option>
-            <option value="GYG">GetYourGuide</option>
-            <option value="VIATOR">Viator</option>
-            <option value="TRIPDOTCOM">Trip.com</option>
-            <option value="BOKUN">Bokun</option>
-            <option value="DIRECT">Direct</option>
-            <option value="MANUAL">Manual</option>
-          </Select>
+          <FormField label="Source" className="space-y-0.5" labelClassName="text-xs text-gray-500">
+            <Select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="px-4"
+            >
+              <option value="ALL">All Sources</option>
+              <option value="GYG">GetYourGuide</option>
+              <option value="VIATOR">Viator</option>
+              <option value="TRIPDOTCOM">Trip.com</option>
+              <option value="BOKUN">Bokun</option>
+              <option value="DIRECT">Direct</option>
+              <option value="MANUAL">Manual</option>
+            </Select>
+          </FormField>
         </div>
       </Card>
 
       {/* Bookings Table */}
-      <Card className="hover:shadow-lg transition-shadow duration-200">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  View
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Booking
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Tour Date
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Pax
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Amount
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Driver
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Source
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {filteredBookings.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                        {searchTerm || statusFilter !== 'ALL' || sourceFilter !== 'ALL' ? (
-                          <Filter className="h-6 w-6 text-gray-400" />
-                        ) : (
-                          <Calendar className="h-6 w-6 text-gray-400" />
+      <DataTableShell>
+        <Table>
+          <TableHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+            <TableRow>
+              <TableHead className="px-4">View</TableHead>
+              <TableHead>Booking</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Tour Date</TableHead>
+              <TableHead>Pax</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Driver</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="bg-white divide-y divide-gray-100">
+            {filteredBookings.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={9} className="py-16 text-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                      {searchTerm || statusFilter !== 'ALL' || sourceFilter !== 'ALL' ? (
+                        <Filter className="h-6 w-6 text-gray-400" />
+                      ) : (
+                        <Calendar className="h-6 w-6 text-gray-400" />
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {searchTerm || statusFilter !== 'ALL' || sourceFilter !== 'ALL'
+                        ? 'No bookings match your filters'
+                        : 'No bookings yet'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {searchTerm || statusFilter !== 'ALL' || sourceFilter !== 'ALL'
+                        ? 'Try adjusting your search criteria'
+                        : 'Process some emails to see bookings here!'}
+                    </p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredBookings.map((booking) => (
+                <TableRow key={booking.id} className="hover:bg-blue-50/30 transition-colors duration-150">
+                  <TableCell className="px-4 whitespace-nowrap">
+                    <Link href={`/bookings/${booking.id}`}>
+                      <Button variant="outline" size="sm" className="hover:bg-blue-50">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {booking.bookingRef || `#${booking.id}`}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate max-w-[150px]">
+                      {booking.package?.packageName || 'Custom Tour'}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 flex-shrink-0">
+                        <User className="h-4 w-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {cleanGuestName(booking.mainContactName)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {booking.mainContactEmail}
+                        </div>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatDate(booking.tourDate)}
+                        </div>
+                        {isUpcoming(booking.tourDate) && (
+                          <div className="text-xs text-amber-600 font-semibold">
+                            {getDaysUntil(booking.tourDate)} days
+                          </div>
                         )}
                       </div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {searchTerm || statusFilter !== 'ALL' || sourceFilter !== 'ALL'
-                          ? 'No bookings match your filters'
-                          : 'No bookings yet'}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {searchTerm || statusFilter !== 'ALL' || sourceFilter !== 'ALL'
-                          ? 'Try adjusting your search criteria'
-                          : 'Process some emails to see bookings here!'}
-                      </p>
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredBookings.map((booking) => (
-                  <tr key={booking.id} className="hover:bg-blue-50/30 transition-colors duration-150">
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <Link href={`/bookings/${booking.id}`}>
-                        <Button variant="outline" size="sm" className="hover:bg-blue-50">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-semibold text-gray-900">
-                        {booking.bookingRef || `#${booking.id}`}
-                      </div>
-                      <div className="text-xs text-gray-500 truncate max-w-[150px]">
-                        {booking.package?.packageName || 'Custom Tour'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 flex-shrink-0">
-                          <User className="h-4 w-4 text-blue-600" />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <span className="inline-flex items-center gap-1 text-sm font-medium text-gray-900">
+                      <Users className="h-4 w-4 text-gray-400" />
+                      {booking.numberOfAdult}A
+                      {booking.numberOfChild ? ` + ${booking.numberOfChild}C` : ''}
+                    </span>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex items-center text-sm font-semibold text-gray-900">
+                      <DollarSign className="h-4 w-4 text-green-600 mr-1" />
+                      {formatCurrency(booking.totalPrice, booking.currency)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {booking.driver ? (
+                      <div className="flex items-center gap-1.5 text-sm text-gray-900">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-100">
+                          <Car className="h-4 w-4 text-green-600" />
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {cleanGuestName(booking.mainContactName)}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {booking.mainContactEmail}
-                          </div>
-                        </div>
+                        <span className="font-medium">{booking.driver.name}</span>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {formatDate(booking.tourDate)}
-                          </div>
-                          {isUpcoming(booking.tourDate) && (
-                            <div className="text-xs text-amber-600 font-semibold">
-                              {getDaysUntil(booking.tourDate)} days
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1 text-sm font-medium text-gray-900">
-                        <Users className="h-4 w-4 text-gray-400" />
-                        {booking.numberOfAdult}A
-                        {booking.numberOfChild ? ` + ${booking.numberOfChild}C` : ''}
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-800">
+                        <AlertCircle className="h-3 w-3" />
+                        Unassigned
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center text-sm font-semibold text-gray-900">
-                        <DollarSign className="h-4 w-4 text-green-600 mr-1" />
-                        {formatCurrency(booking.totalPrice, booking.currency)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {booking.driver ? (
-                        <div className="flex items-center gap-1.5 text-sm text-gray-900">
-                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-100">
-                            <Car className="h-4 w-4 text-green-600" />
-                          </div>
-                          <span className="font-medium">{booking.driver.name}</span>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-yellow-100 text-yellow-800">
-                          <AlertCircle className="h-3 w-3" />
-                          Unassigned
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2.5 py-1 text-xs font-bold rounded-full ${SOURCE_COLORS[booking.source] || 'bg-gray-100 text-gray-800'}`}>
-                        {booking.source}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full ${STATUS_COLORS[booking.status] || 'bg-gray-100 text-gray-800'}`}>
-                        {getStatusIcon(booking.status)}
-                        {booking.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                    )}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <SourceBadge source={booking.source} label={booking.source} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <StatusBadge status={booking.status} label={booking.status} showIcon className="font-bold" />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </DataTableShell>
 
       <Dialog
         open={showReprocessBookingsModal}

@@ -2,15 +2,22 @@
 
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
+import { SourceBadge } from '@/components/ui/source-badge'
+import { StatusBadge } from '@/components/ui/status-badge'
+import {
+  DataTableShell,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { 
   Calendar, 
   DollarSign, 
   TrendingUp, 
-  Users, 
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  Package
+  AlertCircle
 } from 'lucide-react'
 import {
   LineChart,
@@ -29,6 +36,7 @@ import {
 } from 'recharts'
 import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/date-format'
+import { getBookingSourceMeta } from '@/lib/booking/source-label'
 import { useNotifications } from '@/hooks/use-notifications'
 
 interface DashboardStats {
@@ -158,15 +166,6 @@ interface WriteCutoverMetrics {
     mismatchRatio: number
     hasEnoughSamples: boolean
   }
-}
-
-const SOURCE_COLORS: Record<string, string> = {
-  GYG: '#4F46E5',
-  VIATOR: '#10B981',
-  TRIPDOTCOM: '#F59E0B',
-  BOKUN: '#8B5CF6',
-  DIRECT: '#06B6D4',
-  MANUAL: '#6B7280',
 }
 
 export default function DashboardPage() {
@@ -557,7 +556,7 @@ export default function DashboardPage() {
                 {sourceBreakdown.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
-                    fill={SOURCE_COLORS[entry.source] || '#6B7280'} 
+                    fill={getBookingSourceMeta(entry.source).colorHex}
                   />
                 ))}
               </Pie>
@@ -604,110 +603,72 @@ export default function DashboardPage() {
       )}
 
       {/* Recent Bookings */}
-      <Card className="hover:shadow-lg transition-shadow duration-200">
+      <DataTableShell>
         <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">Recent Tours</h2>
             <span className="text-xs text-gray-500">By tour date</span>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50/80 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Booking Ref
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Customer
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Tour
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Amount
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Source
-                </th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {recentBookings.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                        <Calendar className="h-6 w-6 text-gray-400" />
-                      </div>
-                      <p className="text-sm font-medium text-gray-900">No bookings yet</p>
-                      <p className="text-xs text-gray-500">Process some emails to see bookings here!</p>
+        <Table>
+          <TableHeader className="bg-gray-50/80 border-b border-gray-200">
+            <TableRow>
+              <TableHead>Booking Ref</TableHead>
+              <TableHead>Customer</TableHead>
+              <TableHead>Tour</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="bg-white divide-y divide-gray-100">
+            {recentBookings.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-16 text-center">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+                      <Calendar className="h-6 w-6 text-gray-400" />
                     </div>
-                  </td>
-                </tr>
-              ) : (
-                recentBookings.map((booking) => (
-                  <tr key={booking.id} className="hover:bg-blue-50/30 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-semibold text-gray-900">
-                        {booking.bookingRef || `#${booking.id}`}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{booking.mainContactName}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-700 truncate max-w-xs">
-                        {booking.tourName}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700 font-medium">
-                      {formatDate(booking.tourDate)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">
-                      {formatCurrency(booking.totalPrice, booking.currency)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span 
-                        className="inline-flex px-2.5 py-1 text-xs font-bold rounded-full"
-                        style={{
-                          backgroundColor: `${SOURCE_COLORS[booking.source]}20`,
-                          color: SOURCE_COLORS[booking.source],
-                        }}
-                      >
-                        {booking.source}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full ${
-                        booking.status === 'READY' ? 'bg-blue-100 text-blue-800' :
-                        booking.status === 'ATTENTION' ? 'bg-amber-100 text-amber-800' :
-                        booking.status === 'UPDATED' ? 'bg-indigo-100 text-indigo-800' :
-                        booking.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                        booking.status === 'DONE' ? 'bg-emerald-100 text-emerald-800' :
-                        booking.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {booking.status === 'READY' && <Clock className="h-3 w-3" />}
-                        {booking.status === 'ATTENTION' && <AlertCircle className="h-3 w-3" />}
-                        {booking.status === 'COMPLETED' && <CheckCircle className="h-3 w-3" />}
-                        {booking.status === 'DONE' && <CheckCircle className="h-3 w-3" />}
-                        {booking.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                    <p className="text-sm font-medium text-gray-900">No bookings yet</p>
+                    <p className="text-xs text-gray-500">Process some emails to see bookings here!</p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              recentBookings.map((booking) => (
+                <TableRow key={booking.id} className="hover:bg-blue-50/30 transition-colors duration-150">
+                  <TableCell className="whitespace-nowrap">
+                    <div className="text-sm font-semibold text-gray-900">
+                      {booking.bookingRef || `#${booking.id}`}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900">{booking.mainContactName}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm text-gray-700 truncate max-w-xs">
+                      {booking.tourName}
+                    </div>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-gray-700 font-medium">
+                    {formatDate(booking.tourDate)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm font-semibold text-gray-900">
+                    {formatCurrency(booking.totalPrice, booking.currency)}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <SourceBadge source={booking.source} label={booking.source} />
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <StatusBadge status={booking.status} label={booking.status} showIcon className="font-bold" />
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </DataTableShell>
     </div>
   )
 }

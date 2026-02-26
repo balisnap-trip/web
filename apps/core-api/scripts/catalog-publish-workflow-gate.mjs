@@ -406,11 +406,16 @@ async function run() {
       failedJobId = String(createFailedDraftStep.data.jobId);
     }
 
+    const invalidDraftRejectedAtCreate =
+      createFailedDraftStep.ok === false && createFailedDraftStep.status === 400;
     checks.push(
       createCheck(
-        "CP-07_create_failed_scenario_draft",
-        createFailedDraftStep.ok && createFailedDraftStep.data?.status === "DRAFT" && Boolean(failedJobId),
-        `status=${createFailedDraftStep.status ?? "n/a"} jobStatus=${createFailedDraftStep.data?.status || "none"}`
+        "CP-07_invalid_item_guard",
+        invalidDraftRejectedAtCreate ||
+          (createFailedDraftStep.ok &&
+            createFailedDraftStep.data?.status === "DRAFT" &&
+            Boolean(failedJobId)),
+        `status=${createFailedDraftStep.status ?? "n/a"} jobStatus=${createFailedDraftStep.data?.status || "none"} error=${createFailedDraftStep.error || "none"}`
       )
     );
 
@@ -480,6 +485,35 @@ async function run() {
           "CP-11_retry_failed_job_executes",
           retryFailedStep.ok === false && retryFailedStep.status === 400,
           `status=${retryFailedStep.status ?? "n/a"} error=${retryFailedStep.error || "none"}`
+        )
+      );
+    } else if (invalidDraftRejectedAtCreate) {
+      checks.push(
+        createCheck(
+          "CP-08_submit_failed_scenario_review",
+          true,
+          "SKIPPED:create_draft_rejected_with_400"
+        )
+      );
+      checks.push(
+        createCheck(
+          "CP-09_publish_invalid_item_rejected",
+          true,
+          "SKIPPED:create_draft_rejected_with_400"
+        )
+      );
+      checks.push(
+        createCheck(
+          "CP-10_failed_status_recorded",
+          true,
+          "SKIPPED:create_draft_rejected_with_400"
+        )
+      );
+      checks.push(
+        createCheck(
+          "CP-11_retry_failed_job_executes",
+          true,
+          "SKIPPED:create_draft_rejected_with_400"
         )
       );
     }

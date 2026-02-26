@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Plus, Edit, Trash2, Shapes, ChevronDown, ChevronUp } from 'lucide-react'
 import { useNotifications } from '@/hooks/use-notifications'
 import { UNIT_OPTIONS } from '@/lib/finance/constants'
@@ -395,36 +396,36 @@ export default function FinancePatternsPage() {
               <div className="mt-4 space-y-2">
                 <div className="text-xs text-gray-500">Items</div>
                 <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-gray-600">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Item</th>
-                        <th className="px-3 py-2 text-left">Partner</th>
-                        <th className="px-3 py-2 text-left">Unit</th>
-                        <th className="px-3 py-2 text-right">Qty</th>
-                        <th className="px-3 py-2 text-right">Price</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                  <Table className="text-sm">
+                    <TableHeader className="bg-gray-50 text-gray-600">
+                      <TableRow>
+                        <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Item</TableHead>
+                        <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Partner</TableHead>
+                        <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Unit</TableHead>
+                        <TableHead className="px-3 py-2 text-right normal-case tracking-normal text-gray-600">Qty</TableHead>
+                        <TableHead className="px-3 py-2 text-right normal-case tracking-normal text-gray-600">Price</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {pattern.items.map((item) => (
-                        <tr key={item.id} className="border-t">
-                          <td className="px-3 py-2">
+                        <TableRow key={item.id}>
+                          <TableCell className="px-3 py-2">
                             <div className="font-medium text-gray-800">{item.serviceItem.name}</div>
                             <div className="text-xs text-gray-500">{formatCategory(item.serviceItem)}</div>
-                          </td>
-                            <td className="px-3 py-2 text-xs text-gray-600">
-                              {getPayeeLabel({
-                                payeeMode: item.serviceItem.tourItemCategoryRef?.payeeMode,
-                                partnerName: item.defaultPartner?.name,
-                              })}
-                            </td>
-                          <td className="px-3 py-2">{item.defaultUnitType}</td>
-                          <td className="px-3 py-2 text-right">{item.defaultQty}</td>
-                          <td className="px-3 py-2 text-right">{item.defaultPrice.toLocaleString('en-US')}</td>
-                        </tr>
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-xs text-gray-600">
+                            {getPayeeLabel({
+                              payeeMode: item.serviceItem.tourItemCategoryRef?.payeeMode,
+                              partnerName: item.defaultPartner?.name,
+                            })}
+                          </TableCell>
+                          <TableCell className="px-3 py-2">{item.defaultUnitType}</TableCell>
+                          <TableCell className="px-3 py-2 text-right">{item.defaultQty}</TableCell>
+                          <TableCell className="px-3 py-2 text-right">{item.defaultPrice.toLocaleString('en-US')}</TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
 
                 <div className="flex gap-2">

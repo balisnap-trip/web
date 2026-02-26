@@ -12,6 +12,40 @@ import { DatabaseService } from "../database/database.service";
 
 export type CatalogTravelerType = "ADULT" | "CHILD" | "INFANT";
 
+export interface CatalogEditorSlide {
+  url: string;
+  altText: string | null;
+  isCover: boolean;
+  sortOrder: number;
+}
+
+export interface CatalogEditorItineraryEntry {
+  variantId: string | null;
+  day: number;
+  sortOrder: number;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+export interface CatalogEditorFaqEntry {
+  question: string;
+  answer: string;
+}
+
+export interface CatalogEditorItemContent {
+  slides: CatalogEditorSlide[];
+  itinerary: CatalogEditorItineraryEntry[];
+  highlights: string[];
+  inclusions: string[];
+  exclusions: string[];
+  additionalInfo: string[];
+  optionalFeatures: string[];
+  faqs: CatalogEditorFaqEntry[];
+}
+
 export interface CatalogEditorRate {
   rateId: string;
   travelerType: CatalogTravelerType;
@@ -40,6 +74,7 @@ export interface CatalogEditorItem {
   isActive: boolean;
   isFeatured: boolean;
   thumbnailUrl: string | null;
+  content: CatalogEditorItemContent;
   variants: CatalogEditorVariant[];
 }
 
@@ -95,6 +130,10 @@ export interface CatalogEditorRatePatchInput {
   isActive?: boolean;
 }
 
+export interface CatalogEditorItemContentPatchInput {
+  content: unknown;
+}
+
 interface ProductRow {
   item_id: string;
   slug: string;
@@ -123,6 +162,11 @@ interface RateRow {
   currency_code: string;
   price: number | string;
   is_active: boolean;
+}
+
+interface ContentRow {
+  item_id: string;
+  payload: unknown;
 }
 
 interface VariantLookupRow {
@@ -171,6 +215,7 @@ export class CatalogEditorService {
 
       const items = this.mapProducts(productResult.rows);
       await this.attachVariantsAndRates(items, false);
+      await this.attachItemContent(items);
       return items;
     } catch (error) {
       this.rethrowKnownErrors(error);
@@ -187,6 +232,7 @@ export class CatalogEditorService {
       isActive: Boolean(row.is_active),
       isFeatured: Boolean(row.is_featured),
       thumbnailUrl: row.thumbnail_url,
+      content: this.createEmptyItemContent(),
       variants: []
     }));
   }
@@ -217,6 +263,7 @@ export class CatalogEditorService {
 
       const items = this.mapProducts(productResult.rows);
       await this.attachVariantsAndRates(items, includeInactive);
+      await this.attachItemContent(items);
       return items;
     } catch (error) {
       this.rethrowKnownErrors(error);
@@ -314,6 +361,58 @@ export class CatalogEditorService {
         isActive: Boolean(row.is_active)
       });
     }
+  }
+
+  private async attachItemContent(items: CatalogEditorItem[]) {
+    if (items.length === 0) {
+      return;
+    }
+
+    const itemById = new Map(items.map((item) => [item.itemId, item]));
+    const itemIds = [...itemById.keys()];
+
+    try {
+      const contentResult = await this.databaseService.opsQuery<ContentRow>(
+        `
+          select
+            c.product_key::text as item_id,
+            c.payload
+          from catalog_product_content c
+          where c.product_key = any($1::uuid[])
+        `,
+        [itemIds]
+      );
+
+      for (const row of contentResult.rows) {
+        const item = itemById.get(row.item_id);
+        if (!item) {
+          continue;
+        }
+        item.content = this.normalizeItemContentForRead(row.payload);
+      }
+    } catch (error) {
+      const pgErrorCode =
+        error && typeof error === "object" && "code" in error
+          ? String((error as { code?: string }).code)
+          : "";
+      if (pgErrorCode === "42P01") {
+        return;
+      }
+      throw error;
+    }
+  }
+
+  private createEmptyItemContent(): CatalogEditorItemContent {
+    return {
+      slides: [],
+      itinerary: [],
+      highlights: [],
+      inclusions: [],
+      exclusions: [],
+      additionalInfo: [],
+      optionalFeatures: [],
+      faqs: []
+    };
   }
 
   async createItem(actor: string, input: CatalogEditorItemCreateInput): Promise<CatalogEditorItem> {
@@ -464,6 +563,66 @@ export class CatalogEditorService {
       resourceId: itemId,
       metadata: {
         fields: setClauses.length
+      }
+    });
+
+    return item;
+  }
+
+  async patchItemContent(
+    actor: string,
+    itemId: string,
+    input: CatalogEditorItemContentPatchInput
+  ): Promise<CatalogEditorItem> {
+    const normalizedActor = this.normalizeActor(actor);
+    const normalizedContent = this.normalizeItemContentForWrite(input.content);
+
+    try {
+      await this.databaseService.withOpsTransaction(async (client) => {
+        await this.assertItemExists(client, itemId);
+        await client.query(
+          `
+            insert into catalog_product_content (
+              product_key,
+              payload,
+              updated_by
+            ) values (
+              $1::uuid,
+              $2::jsonb,
+              $3
+            )
+            on conflict (product_key) do update
+            set payload = excluded.payload,
+                updated_by = excluded.updated_by,
+                updated_at = now()
+          `,
+          [itemId, JSON.stringify(normalizedContent), normalizedActor]
+        );
+      });
+    } catch (error) {
+      this.rethrowKnownErrors(error);
+      throw error;
+    }
+
+    const item = await this.getItemById(itemId, true);
+    if (!item) {
+      throw new NotFoundException(`Catalog item not found for id: ${itemId}`);
+    }
+
+    this.auditService.record({
+      eventType: "CATALOG_ITEM_CONTENT_UPDATED",
+      actor: normalizedActor,
+      resourceType: "CATALOG_ITEM",
+      resourceId: itemId,
+      metadata: {
+        slides: normalizedContent.slides.length,
+        itinerary: normalizedContent.itinerary.length,
+        highlights: normalizedContent.highlights.length,
+        inclusions: normalizedContent.inclusions.length,
+        exclusions: normalizedContent.exclusions.length,
+        additionalInfo: normalizedContent.additionalInfo.length,
+        optionalFeatures: normalizedContent.optionalFeatures.length,
+        faqs: normalizedContent.faqs.length
       }
     });
 
@@ -929,6 +1088,343 @@ export class CatalogEditorService {
     });
 
     return item;
+  }
+
+  private normalizeItemContentForWrite(content: unknown): CatalogEditorItemContent {
+    if (!this.isRecord(content)) {
+      throw new BadRequestException("CATALOG_ITEM_CONTENT_INVALID");
+    }
+    return this.normalizeItemContentRecord(content, true);
+  }
+
+  private normalizeItemContentForRead(payload: unknown): CatalogEditorItemContent {
+    if (!this.isRecord(payload)) {
+      return this.createEmptyItemContent();
+    }
+    return this.normalizeItemContentRecord(payload, false);
+  }
+
+  private normalizeItemContentRecord(
+    input: Record<string, unknown>,
+    strict: boolean
+  ): CatalogEditorItemContent {
+    return {
+      slides: this.normalizeSlides(input.slides, strict),
+      itinerary: this.normalizeItinerary(input.itinerary, strict),
+      highlights: this.normalizeStringList(input.highlights, strict, "CATALOG_ITEM_CONTENT_HIGHLIGHTS_INVALID"),
+      inclusions: this.normalizeStringList(input.inclusions, strict, "CATALOG_ITEM_CONTENT_INCLUSIONS_INVALID"),
+      exclusions: this.normalizeStringList(input.exclusions, strict, "CATALOG_ITEM_CONTENT_EXCLUSIONS_INVALID"),
+      additionalInfo: this.normalizeStringList(
+        input.additionalInfo,
+        strict,
+        "CATALOG_ITEM_CONTENT_ADDITIONAL_INFO_INVALID"
+      ),
+      optionalFeatures: this.normalizeStringList(
+        input.optionalFeatures,
+        strict,
+        "CATALOG_ITEM_CONTENT_OPTIONAL_FEATURES_INVALID"
+      ),
+      faqs: this.normalizeFaqs(input.faqs, strict)
+    };
+  }
+
+  private normalizeSlides(value: unknown, strict: boolean): CatalogEditorSlide[] {
+    if (value === null || value === undefined) {
+      return [];
+    }
+    if (!Array.isArray(value)) {
+      if (strict) {
+        throw new BadRequestException("CATALOG_ITEM_CONTENT_SLIDES_INVALID");
+      }
+      return [];
+    }
+
+    const slides: CatalogEditorSlide[] = [];
+    for (let index = 0; index < value.length; index += 1) {
+      const row = value[index];
+      if (!this.isRecord(row)) {
+        if (strict) {
+          throw new BadRequestException("CATALOG_ITEM_CONTENT_SLIDES_INVALID");
+        }
+        continue;
+      }
+
+      const url = this.normalizeOptionalTextFromUnknown(
+        row.url,
+        strict,
+        "CATALOG_ITEM_CONTENT_SLIDE_URL_INVALID",
+        2048
+      );
+      if (!url) {
+        if (strict) {
+          throw new BadRequestException("CATALOG_ITEM_CONTENT_SLIDE_URL_REQUIRED");
+        }
+        continue;
+      }
+
+      const altText = this.normalizeOptionalTextFromUnknown(
+        row.altText,
+        strict,
+        "CATALOG_ITEM_CONTENT_SLIDE_ALT_TEXT_INVALID",
+        255
+      );
+
+      slides.push({
+        url,
+        altText,
+        isCover: Boolean(row.isCover),
+        sortOrder: this.parseIntegerFromUnknown(
+          row.sortOrder,
+          index + 1,
+          0,
+          strict,
+          "CATALOG_ITEM_CONTENT_SLIDE_SORT_ORDER_INVALID"
+        )
+      });
+    }
+
+    slides.sort((left, right) => left.sortOrder - right.sortOrder);
+
+    const coverIndex = slides.findIndex((slide) => slide.isCover);
+    if (coverIndex === -1 && slides.length > 0) {
+      slides[0].isCover = true;
+    } else if (coverIndex > -1) {
+      for (let index = 0; index < slides.length; index += 1) {
+        slides[index].isCover = index === coverIndex;
+      }
+    }
+
+    return slides;
+  }
+
+  private normalizeItinerary(value: unknown, strict: boolean): CatalogEditorItineraryEntry[] {
+    if (value === null || value === undefined) {
+      return [];
+    }
+    if (!Array.isArray(value)) {
+      if (strict) {
+        throw new BadRequestException("CATALOG_ITEM_CONTENT_ITINERARY_INVALID");
+      }
+      return [];
+    }
+
+    const itinerary: CatalogEditorItineraryEntry[] = [];
+
+    for (let index = 0; index < value.length; index += 1) {
+      const row = value[index];
+      if (!this.isRecord(row)) {
+        if (strict) {
+          throw new BadRequestException("CATALOG_ITEM_CONTENT_ITINERARY_INVALID");
+        }
+        continue;
+      }
+
+      const title = this.normalizeOptionalTextFromUnknown(
+        row.title,
+        strict,
+        "CATALOG_ITEM_CONTENT_ITINERARY_TITLE_INVALID",
+        255
+      );
+      if (!title) {
+        if (strict) {
+          throw new BadRequestException("CATALOG_ITEM_CONTENT_ITINERARY_TITLE_REQUIRED");
+        }
+        continue;
+      }
+
+      const rawVariantId = this.normalizeOptionalTextFromUnknown(
+        row.variantId,
+        strict,
+        "CATALOG_ITEM_CONTENT_ITINERARY_VARIANT_INVALID",
+        64
+      );
+
+      itinerary.push({
+        variantId: rawVariantId || null,
+        day: this.parseIntegerFromUnknown(
+          row.day,
+          1,
+          1,
+          strict,
+          "CATALOG_ITEM_CONTENT_ITINERARY_DAY_INVALID"
+        ),
+        sortOrder: this.parseIntegerFromUnknown(
+          row.sortOrder,
+          index + 1,
+          0,
+          strict,
+          "CATALOG_ITEM_CONTENT_ITINERARY_SORT_ORDER_INVALID"
+        ),
+        title,
+        description: this.normalizeOptionalTextFromUnknown(
+          row.description,
+          strict,
+          "CATALOG_ITEM_CONTENT_ITINERARY_DESCRIPTION_INVALID",
+          2000
+        ),
+        location: this.normalizeOptionalTextFromUnknown(
+          row.location,
+          strict,
+          "CATALOG_ITEM_CONTENT_ITINERARY_LOCATION_INVALID",
+          255
+        ),
+        startTime: this.normalizeOptionalTextFromUnknown(
+          row.startTime,
+          strict,
+          "CATALOG_ITEM_CONTENT_ITINERARY_START_TIME_INVALID",
+          32
+        ),
+        endTime: this.normalizeOptionalTextFromUnknown(
+          row.endTime,
+          strict,
+          "CATALOG_ITEM_CONTENT_ITINERARY_END_TIME_INVALID",
+          32
+        )
+      });
+    }
+
+    itinerary.sort((left, right) => {
+      if (left.day !== right.day) {
+        return left.day - right.day;
+      }
+      return left.sortOrder - right.sortOrder;
+    });
+
+    return itinerary;
+  }
+
+  private normalizeFaqs(value: unknown, strict: boolean): CatalogEditorFaqEntry[] {
+    if (value === null || value === undefined) {
+      return [];
+    }
+    if (!Array.isArray(value)) {
+      if (strict) {
+        throw new BadRequestException("CATALOG_ITEM_CONTENT_FAQS_INVALID");
+      }
+      return [];
+    }
+
+    const faqs: CatalogEditorFaqEntry[] = [];
+    for (const row of value) {
+      if (!this.isRecord(row)) {
+        if (strict) {
+          throw new BadRequestException("CATALOG_ITEM_CONTENT_FAQS_INVALID");
+        }
+        continue;
+      }
+
+      const question = this.normalizeOptionalTextFromUnknown(
+        row.question,
+        strict,
+        "CATALOG_ITEM_CONTENT_FAQ_QUESTION_INVALID",
+        255
+      );
+      const answer = this.normalizeOptionalTextFromUnknown(
+        row.answer,
+        strict,
+        "CATALOG_ITEM_CONTENT_FAQ_ANSWER_INVALID",
+        2000
+      );
+
+      if (!question || !answer) {
+        if (strict) {
+          throw new BadRequestException("CATALOG_ITEM_CONTENT_FAQ_REQUIRED");
+        }
+        continue;
+      }
+
+      faqs.push({
+        question,
+        answer
+      });
+    }
+
+    return faqs;
+  }
+
+  private normalizeStringList(value: unknown, strict: boolean, errorCode: string): string[] {
+    if (value === null || value === undefined) {
+      return [];
+    }
+    if (!Array.isArray(value)) {
+      if (strict) {
+        throw new BadRequestException(errorCode);
+      }
+      return [];
+    }
+
+    const output: string[] = [];
+    const seen = new Set<string>();
+
+    for (const entry of value) {
+      if (typeof entry !== "string") {
+        if (strict) {
+          throw new BadRequestException(errorCode);
+        }
+        continue;
+      }
+      const normalized = this.normalizeOptionalText(entry)?.slice(0, 500) || "";
+      if (!normalized || seen.has(normalized)) {
+        continue;
+      }
+      seen.add(normalized);
+      output.push(normalized);
+    }
+
+    return output;
+  }
+
+  private parseIntegerFromUnknown(
+    value: unknown,
+    fallback: number,
+    min: number,
+    strict: boolean,
+    errorCode: string
+  ): number {
+    if (value === null || value === undefined || value === "") {
+      return fallback;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      if (strict) {
+        throw new BadRequestException(errorCode);
+      }
+      return fallback;
+    }
+
+    const normalized = Math.trunc(parsed);
+    if (normalized < min) {
+      if (strict) {
+        throw new BadRequestException(errorCode);
+      }
+      return fallback;
+    }
+
+    return normalized;
+  }
+
+  private normalizeOptionalTextFromUnknown(
+    value: unknown,
+    strict: boolean,
+    errorCode: string,
+    maxLength: number
+  ): string | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value !== "string") {
+      if (strict) {
+        throw new BadRequestException(errorCode);
+      }
+      return null;
+    }
+    const normalized = this.normalizeOptionalText(value);
+    return normalized ? normalized.slice(0, maxLength) : null;
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
 
   private normalizeVariantInput(input: CatalogEditorVariantCreateInput): {

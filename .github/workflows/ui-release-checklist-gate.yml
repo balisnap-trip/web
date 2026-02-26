@@ -1,0 +1,58 @@
+name: UI Release Checklist Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      ui_release_checklist_allow_baseline_drift:
+        description: "Allow baseline drift (set true only with explicit reviewer approval)"
+        required: true
+        default: false
+        type: boolean
+      ui_release_checklist_update_baseline:
+        description: "Update baseline hash manifest"
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  ui-release-checklist-gate:
+    name: Run UI Release Checklist Gate (T-013-06)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      UI_RELEASE_CHECKLIST_ALLOW_BASELINE_DRIFT: ${{ inputs.ui_release_checklist_allow_baseline_drift }}
+      UI_RELEASE_CHECKLIST_UPDATE_BASELINE: ${{ inputs.ui_release_checklist_update_baseline }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run UI release checklist gate
+        id: run_gate
+        run: pnpm --filter bst-admin gate:ui-release-checklist
+        continue-on-error: true
+
+      - name: Upload UI release checklist reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-release-checklist-gate-reports
+          if-no-files-found: warn
+          path: reports/gates/ui-release-checklist/**
+
+      - name: Mark workflow failed when gate check fails
+        if: steps.run_gate.outcome != 'success'
+        run: exit 1

@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatCurrency } from '@/lib/currency'
 import type { Driver, FinanceItemForm, TourItemCategory } from '@/lib/finance/types'
 
@@ -229,21 +230,21 @@ export function CommissionSplitDialog({
           </div>
 
           <div className="overflow-auto rounded-xl border border-slate-200">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-3 py-2 text-left">Vendor</th>
-                  <th className="px-3 py-2 text-left">Gross (IDR)</th>
-                  <th className="px-3 py-2 text-center">50/50</th>
-                  <th className="px-3 py-2 text-left">Company Takes (IDR)</th>
-                  <th className="px-3 py-2 text-right">Driver Gets</th>
-                  <th className="px-3 py-2 text-right"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
+            <Table className="text-sm">
+              <TableHeader className="bg-slate-50 text-xs uppercase text-slate-500">
+                <TableRow>
+                  <TableHead className="px-3 py-2 text-left">Vendor</TableHead>
+                  <TableHead className="px-3 py-2 text-left">Gross (IDR)</TableHead>
+                  <TableHead className="px-3 py-2 text-center">50/50</TableHead>
+                  <TableHead className="px-3 py-2 text-left">Company Takes (IDR)</TableHead>
+                  <TableHead className="px-3 py-2 text-right">Driver Gets</TableHead>
+                  <TableHead className="px-3 py-2 text-right"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="divide-y divide-slate-200">
                 {computed.perRow.map(({ row, gross, companyTakes, driverGets, invalidCompanyTakes, isActive }) => (
-                  <tr key={row.id} className={invalidCompanyTakes ? 'bg-rose-50/40' : ''}>
-                    <td className="px-3 py-2 align-top">
+                  <TableRow key={row.id} className={invalidCompanyTakes ? 'bg-rose-50/40' : ''}>
+                    <TableCell className="px-3 py-2 align-top">
                       <Input
                         value={row.vendor}
                         onChange={(e) =>
@@ -254,8 +255,8 @@ export function CommissionSplitDialog({
                         placeholder="Satria Kopi"
                         disabled={disabled}
                       />
-                    </td>
-                    <td className="px-3 py-2 align-top">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 align-top">
                       <Input
                         value={row.grossInput}
                         onChange={(e) =>
@@ -269,8 +270,8 @@ export function CommissionSplitDialog({
                       {isActive ? (
                         <div className="mt-1 text-[11px] text-slate-500">Parsed: {formatCurrency(gross, 'IDR')}</div>
                       ) : null}
-                    </td>
-                    <td className="px-3 py-2 align-top text-center">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 align-top text-center">
                       <Checkbox
                         checked={row.useHalfSplit}
                         onChange={(e) =>
@@ -284,8 +285,8 @@ export function CommissionSplitDialog({
                         }
                         disabled={disabled}
                       />
-                    </td>
-                    <td className="px-3 py-2 align-top">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 align-top">
                       <Input
                         value={row.useHalfSplit ? String(companyTakes || 0) : row.companyTakesInput}
                         onChange={(e) =>
@@ -297,16 +298,16 @@ export function CommissionSplitDialog({
                         disabled={disabled || row.useHalfSplit}
                       />
                       {invalidCompanyTakes ? (
-                        <div className="mt-1 text-[11px] text-rose-700">Must be ≤ gross.</div>
+                        <div className="mt-1 text-[11px] text-rose-700">Must be &lt;= gross.</div>
                       ) : null}
-                    </td>
-                    <td className="px-3 py-2 align-top text-right">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 align-top text-right">
                       <div className="font-medium text-slate-900">{formatCurrency(driverGets, 'IDR')}</div>
                       <div className="text-[11px] text-slate-500">
                         Company: {formatCurrency(companyTakes, 'IDR')}
                       </div>
-                    </td>
-                    <td className="px-3 py-2 align-top text-right">
+                    </TableCell>
+                    <TableCell className="px-3 py-2 align-top text-right">
                       <Button
                         variant="outline"
                         size="sm"
@@ -315,11 +316,11 @@ export function CommissionSplitDialog({
                       >
                         Remove
                       </Button>
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
+              </TableBody>
+            </Table>
           </div>
 
           <div className="flex items-center justify-between gap-3">

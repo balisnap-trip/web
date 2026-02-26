@@ -1,6 +1,7 @@
 # Phase-2 Release Gate Checklist
 
 Tanggal: 2026-02-19  
+Update terakhir: 2026-02-21  
 Scope: gate eksekusi batch A-H sebelum lanjut batch berikutnya.
 
 ## 1. Aturan Umum
@@ -23,6 +24,7 @@ Scope: gate eksekusi batch A-H sebelum lanjut batch berikutnya.
 | G-04 | Rollback readiness | RTO toggle flag `<= 5 menit` |
 | G-05 | Public booking success rate | tidak turun > `2%` dari baseline 7 hari |
 | G-06 | Payment mismatch harian | `<= 0.5%` |
+| G-07 | UI release checklist internal (`EP-013`) | `PASS` + baseline drift `0` (atau override drift dengan approval eksplisit) |
 
 ## 3. Gate Per Batch
 
@@ -261,7 +263,42 @@ Workflow automation:
 1. GitHub schedule + manual workflow:
    1. `.github/workflows/reconciliation-daily-report.yml`
 
-## 4.4 Canary Rollout Controls (WS-12)
+## 4.4 Gate Automation Commands (EP-013 UI Release Checklist)
+
+`bstadmin` menyediakan command otomatis untuk freeze checklist UI prioritas internal:
+
+1. UI release checklist gate (strict, default):
+   1. `pnpm --filter bst-admin gate:ui-release-checklist`
+2. Update baseline hash untuk freeze baru (wajib setelah reviewer approval):
+   1. `UI_RELEASE_CHECKLIST_UPDATE_BASELINE=true pnpm --filter bst-admin gate:ui-release-checklist`
+3. Override drift baseline (hanya untuk exception terkontrol):
+   1. `UI_RELEASE_CHECKLIST_ALLOW_BASELINE_DRIFT=true pnpm --filter bst-admin gate:ui-release-checklist`
+
+Output evidence:
+
+1. `reports/gates/ui-release-checklist/{timestamp}.json`
+2. `reports/gates/ui-release-checklist/{timestamp}.md`
+
+Baseline manifest:
+
+1. `bstadmin/config/ui-release-checklist-baseline.json`
+
+Workflow automation:
+
+1. GitHub manual workflow:
+   1. `.github/workflows/ui-release-checklist-gate.yml`
+
+Otomasi gabungan release candidate (UI internal + CM gate + opsional continuity):
+
+1. Command lokal:
+   1. `pnpm gate:release-candidate-ui`
+2. Workflow manual:
+   1. `.github/workflows/release-candidate-ui-gates.yml`
+3. Output evidence agregat:
+   1. `reports/gates/release-candidate-ui/{timestamp}.json`
+   2. `reports/gates/release-candidate-ui/{timestamp}.md`
+
+## 4.5 Canary Rollout Controls (WS-12)
 
 `bstadmin` mendukung cutover bertahap berbasis actor untuk jalur read/write:
 
@@ -294,7 +331,7 @@ Verifikasi actor-level rollout:
 
 1. endpoint internal `GET /api/ops/cutover-state` di `bstadmin` mengembalikan hasil evaluasi canary untuk user yang sedang login.
 
-## 4.5 Gate Automation Commands (Batch G - BG-01)
+## 4.6 Gate Automation Commands (Batch G - BG-01)
 
 `bstadmin` menyediakan command otomatis untuk gate parity read model ops:
 
@@ -326,7 +363,7 @@ Workflow automation:
 3. Runbook operasional:
    1. `doc/runbook-ops-read-parity-gate-operations-2026-02-20.md`
 
-## 4.6 Gate Automation Commands (Batch H - H-01)
+## 4.7 Gate Automation Commands (Batch H - H-01)
 
 `bstadmin` menyediakan command otomatis untuk gate mismatch dual-write:
 
@@ -343,7 +380,7 @@ Workflow automation:
 1. GitHub manual workflow:
    1. `.github/workflows/write-cutover-mismatch-gate.yml`
 
-## 4.7 Gate Automation Commands (Batch C - C-01/C-02/C-03)
+## 4.8 Gate Automation Commands (Batch C - C-01/C-02/C-03)
 
 `apps/core-api` menyediakan command otomatis untuk gate catalog bridge:
 
@@ -364,7 +401,7 @@ Workflow automation:
 1. GitHub manual workflow:
    1. `.github/workflows/catalog-bridge-gate.yml`
 
-## 4.8 Gate Automation Commands (Batch D - D-01/D-02/D-03/D-04)
+## 4.9 Gate Automation Commands (Batch D - D-01/D-02/D-03/D-04)
 
 `apps/core-api` menyediakan command otomatis untuk gate booking bridge:
 
@@ -387,7 +424,7 @@ Workflow automation:
 1. GitHub manual workflow:
    1. `.github/workflows/booking-bridge-gate.yml`
 
-## 4.9 Gate Automation Commands (Batch E - E-01/E-02/E-03)
+## 4.10 Gate Automation Commands (Batch E - E-01/E-02/E-03)
 
 `apps/core-api` menyediakan command otomatis untuk gate payment-finance bridge:
 
@@ -426,3 +463,21 @@ Sign-off:
 - Ops Lead:
 - Owner:
 ```
+
+## 6. Snapshot Audit Menyeluruh (2026-02-21)
+
+1. Status publish prod:
+   1. `public web` (`balisnaptrip.com`) = `LIVE`,
+   2. `admin ops` (`admin.balisnaptrip.com`) = `LIVE`,
+   3. `content manager` = belum masuk scope publish prod (lanjut pengembangan tim lain).
+2. Validasi domain prod:
+   1. kedua domain resolve ke `192.168.0.60`,
+   2. hash response domain vs direct runtime `5000/3100` = `MATCH`.
+3. Validasi runtime:
+   1. listener prod aktif pada `3100` dan `5000`,
+   2. listener preview `3101` dan `3200` nonaktif.
+4. Hardening post-publish `bstadmin`:
+   1. `HOSTNAME=0.0.0.0`,
+   2. `INTERNAL_CRON_BASE_URL=http://127.0.0.1:3100`,
+   3. `CRON_INITIAL_DELAY_MS=30000`,
+   4. cron log stabil `success`.

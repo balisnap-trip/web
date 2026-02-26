@@ -14,7 +14,12 @@ const baseConfig = {
     },
   },
   images: {
-    domains: ['localhost', '192.168.0.60'],
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'https', hostname: 'localhost' },
+      { protocol: 'http', hostname: '192.168.0.60' },
+      { protocol: 'https', hostname: '192.168.0.60' },
+    ],
     unoptimized: process.env.NODE_ENV === 'development', // Speed up dev
   },
   eslint: {

@@ -1,0 +1,109 @@
+name: Release Candidate UI Gates
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_api_base_url:
+        description: "Core API base URL"
+        required: true
+        default: "http://127.0.0.1:4000"
+        type: string
+      public_web_base_url:
+        description: "Public web base URL (required when run_public_web_continuity=true)"
+        required: false
+        default: ""
+        type: string
+      run_ui_release_checklist:
+        description: "Run EP-013 UI release checklist gate"
+        required: true
+        default: true
+        type: boolean
+      run_catalog_editor_smoke:
+        description: "Run EP-010 catalog editor smoke"
+        required: true
+        default: true
+        type: boolean
+      run_catalog_publish_workflow_gate:
+        description: "Run EP-010 catalog publish workflow gate"
+        required: true
+        default: true
+        type: boolean
+      run_public_web_continuity:
+        description: "Run T-009-05 public web continuity gate"
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  release-candidate-ui-gates:
+    name: Run Release Candidate UI Gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CORE_API_BASE_URL: ${{ inputs.core_api_base_url }}
+      CORE_API_ADMIN_TOKEN: ${{ secrets.CORE_API_ADMIN_TOKEN }}
+      CORE_API_ADMIN_ROLE: MANAGER
+      CATALOG_PUBLISH_SECRET: ${{ secrets.CATALOG_PUBLISH_SECRET }}
+      PUBLIC_WEB_BASE_URL: ${{ inputs.public_web_base_url }}
+      RC_UI_GATES_RUN_UI_CHECKLIST: ${{ inputs.run_ui_release_checklist }}
+      RC_UI_GATES_RUN_CATALOG_EDITOR_SMOKE: ${{ inputs.run_catalog_editor_smoke }}
+      RC_UI_GATES_RUN_CATALOG_PUBLISH_GATE: ${{ inputs.run_catalog_publish_workflow_gate }}
+      RC_UI_GATES_RUN_PUBLIC_WEB_CONTINUITY: ${{ inputs.run_public_web_continuity }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - name: Validate workflow inputs and required secrets
+        run: |
+          REQUIRE_CORE_API="false"
+          if [ "$RC_UI_GATES_RUN_CATALOG_EDITOR_SMOKE" = "true" ] || [ "$RC_UI_GATES_RUN_CATALOG_PUBLISH_GATE" = "true" ]; then
+            REQUIRE_CORE_API="true"
+          fi
+          if [ "$REQUIRE_CORE_API" = "true" ] && [ -z "$CORE_API_BASE_URL" ]; then
+            echo "Missing core_api_base_url input"
+            exit 1
+          fi
+          if [ "$REQUIRE_CORE_API" = "true" ] && [ -z "$CORE_API_ADMIN_TOKEN" ]; then
+            echo "Missing CORE_API_ADMIN_TOKEN secret"
+            exit 1
+          fi
+          if [ "$RC_UI_GATES_RUN_PUBLIC_WEB_CONTINUITY" = "true" ] && [ -z "$PUBLIC_WEB_BASE_URL" ]; then
+            echo "Missing public_web_base_url input while run_public_web_continuity=true"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run release candidate UI gates
+        id: run_gate
+        run: pnpm gate:release-candidate-ui
+        continue-on-error: true
+
+      - name: Upload release candidate UI gate reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate-ui-gates-reports
+          if-no-files-found: warn
+          path: |
+            reports/gates/release-candidate-ui/**
+            reports/gates/ui-release-checklist/**
+            reports/smoke/catalog-editor/**
+            reports/gates/catalog-publish-workflow/**
+            reports/gates/public-web-continuity/**
+
+      - name: Mark workflow failed when gate check fails
+        if: steps.run_gate.outcome != 'success'
+        run: exit 1

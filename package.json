@@ -19,6 +19,7 @@
     "gate:catalog-bridge": "pnpm --filter @bst/core-api gate:catalog-bridge",
     "gate:booking-bridge": "pnpm --filter @bst/core-api gate:booking-bridge",
     "gate:payment-finance-bridge": "pnpm --filter @bst/core-api gate:payment-finance-bridge",
+    "gate:release-candidate-ui": "node ./scripts/release-candidate-ui-gates.mjs",
     "gate:public-web-continuity": "pnpm --filter next-app-template gate:public-web-continuity",
     "deploy:stagging-bst": "node ./scripts/stagging-bst/deploy.mjs",
     "deploy:stagging-bst:build": "node ./scripts/stagging-bst/deploy.mjs --run-install --run-build",

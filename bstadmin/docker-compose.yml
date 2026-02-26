@@ -11,6 +11,10 @@ services:
       - 8.8.8.8
     env_file:
       - .env
+    environment:
+      - HOSTNAME=0.0.0.0
+      - INTERNAL_CRON_BASE_URL=http://127.0.0.1:3100
+      - CRON_INITIAL_DELAY_MS=30000
     restart: unless-stopped
   gh-runner:
     container_name: bstadmin-runner

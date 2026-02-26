@@ -230,10 +230,9 @@ export class BokunParser implements EmailParser {
                      data['Pickup Time']
 
     // Extract customer info
-    let mainContactName = data['Customer'] ||
-                          data['Guest Name'] ||
-                          data['Lead Traveler'] ||
-                          'Guest'
+    let mainContactName =
+      this.getFieldValue(data, dataLower, ['Customer', 'Guest Name', 'Lead Traveler']) ||
+      'Guest'
 
     // Reverse name format from "LastName, FirstName" to "FirstName LastName"
     if (mainContactName.includes(',')) {
@@ -243,15 +242,27 @@ export class BokunParser implements EmailParser {
       }
     }
 
-    const mainContactEmail = data['Email'] ||
-                            data['Guest Email'] ||
-                            'no-email@viator.com'
+    const mainContactEmail =
+      this.getFieldValue(data, dataLower, ['Email', 'Guest Email']) ||
+      'no-email@viator.com'
 
-    // Clean phone number
-    let phoneNumber = data['Customer Phone'] || data['Phone'] || ''
-    if (phoneNumber) {
-      phoneNumber = phoneNumber.replace(/^[A-Z]{2}\+/, '+').replace(/\s+/g, '')
-    }
+    const fallbackText = `${textBody}\n${$.text()}`
+
+    // Extract + normalize phone number with case-insensitive key lookup
+    // and text fallback for merged lines like:
+    // "Customer phone AU+61 0424637131 Date Sat 28.Feb..."
+    const phoneFromFields = this.getFieldValue(data, dataLower, [
+      'Customer Phone',
+      'Customer Phone Number',
+      'Phone',
+      'Mobile',
+      'Telephone',
+      'Contact Phone',
+    ])
+    const phoneNumber =
+      this.normalizePhoneNumber(phoneFromFields) ||
+      this.extractPhoneFromText(fallbackText) ||
+      ''
 
     // Extract pricing
     const priceStr = data['Total'] || data['Total Price'] || ''
@@ -377,6 +388,71 @@ export class BokunParser implements EmailParser {
     }
 
     return BookingSource.BOKUN
+  }
+
+  private getFieldValue(
+    data: Record<string, string>,
+    dataLower: Record<string, string>,
+    keys: string[]
+  ): string {
+    for (const key of keys) {
+      const direct = data[key]
+      if (direct) return direct
+
+      const lowered = dataLower[key.toLowerCase()]
+      if (lowered) return lowered
+    }
+    return ''
+  }
+
+  private extractPhoneFromText(text: string): string {
+    if (!text) return ''
+
+    const labeledPatterns = [
+      /(?:Customer\s*phone|Customer\s*mobile|Contact\s*phone|Phone|Mobile|Tel(?:ephone)?)\s*[:\-]?\s*([A-Z]{2}\+\d[\d\s().-]{5,}\d|\+\d[\d\s().-]{5,}\d|0\d[\d\s().-]{6,}\d|\d[\d\s().-]{7,}\d)(?=\s*(?:Date|Rate|PAX|Pax|Pick-?up|Pickup|Meeting|$|\n))/i,
+      /(?:Customer\s*phone|Customer\s*mobile|Contact\s*phone|Phone|Mobile|Tel(?:ephone)?)\s*[:\-]?\s*([A-Z]{2}\+\d[\d\s().-]{5,}\d|\+\d[\d\s().-]{5,}\d|0\d[\d\s().-]{6,}\d|\d[\d\s().-]{7,}\d)/i,
+    ]
+
+    for (const pattern of labeledPatterns) {
+      const match = text.match(pattern)
+      if (match && match[1]) {
+        const normalized = this.normalizePhoneNumber(match[1])
+        if (normalized) return normalized
+      }
+    }
+
+    const looseInternational = text.match(/\b([A-Z]{2}\+\d[\d\s().-]{5,}\d|\+\d[\d\s().-]{6,}\d)\b/)
+    if (looseInternational && looseInternational[1]) {
+      return this.normalizePhoneNumber(looseInternational[1])
+    }
+
+    return ''
+  }
+
+  private normalizePhoneNumber(raw: string): string {
+    if (!raw) return ''
+
+    let normalized = raw.replace(/\u00A0/g, ' ').trim()
+    if (!normalized) return ''
+
+    // Convert country prefix patterns like AU+61 -> +61
+    normalized = normalized.replace(/^[A-Z]{2}\+/i, '+')
+
+    // Stop at common label boundaries when source line is merged
+    const boundaryIndex = normalized.search(/\b(?:Date|Rate|PAX|Pax|Pick-?up|Pickup|Meeting|Email|Customer)\b/i)
+    if (boundaryIndex > 0) {
+      normalized = normalized.slice(0, boundaryIndex).trim()
+    }
+
+    normalized = normalized.replace(/[^+\d\s().-]/g, '')
+    normalized = normalized.replace(/\s+/g, '')
+    normalized = normalized.replace(/^00/, '+')
+    normalized = normalized.replace(/(?!^)\+/g, '')
+
+    const digitCount = normalized.replace(/\D/g, '').length
+    if (digitCount < 7) return ''
+
+    return normalized
   }
 
   /**

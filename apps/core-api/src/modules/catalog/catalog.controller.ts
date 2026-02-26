@@ -19,6 +19,7 @@ import { AdminAuthGuard } from "../../common/auth/admin-auth.guard";
 import { successEnvelope } from "../../common/http/envelope";
 import {
   CatalogEditorItemCreateInput,
+  CatalogEditorItemContentPatchInput,
   CatalogEditorItemPatchInput,
   CatalogEditorRateCreateInput,
   CatalogEditorRatePatchInput,
@@ -138,6 +139,24 @@ export class CatalogController {
     @Headers() headers: Record<string, unknown>
   ) {
     return successEnvelope(await this.catalogEditorService.patchItem(this.resolveActor(headers), itemId, body));
+  }
+
+  @Patch("items/:itemId/content")
+  @ApiOperation({ summary: "Update catalog item extended content" })
+  @ApiParam({ name: "itemId", example: "7f139f89-59df-4bb3-9bc6-1e579f5df9fa" })
+  @ApiBearerAuth()
+  @ApiHeader({ name: "x-admin-role", description: "Admin role (ADMIN/MANAGER)", required: true })
+  @ApiHeader({ name: "x-actor", description: "Actor identifier for audit trail", required: false })
+  @UseGuards(AdminAuthGuard)
+  @RequireAdminRoles("ADMIN", "MANAGER")
+  async patchItemContent(
+    @Param("itemId") itemId: string,
+    @Body() body: CatalogEditorItemContentPatchInput,
+    @Headers() headers: Record<string, unknown>
+  ) {
+    return successEnvelope(
+      await this.catalogEditorService.patchItemContent(this.resolveActor(headers), itemId, body)
+    );
   }
 
   @Delete("items/:itemId")

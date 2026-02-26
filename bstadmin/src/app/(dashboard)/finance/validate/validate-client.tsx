@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { StatusBadge } from '@/components/ui/status-badge'
 import { AlertCircle, Plus, Save, Lock, Unlock } from 'lucide-react'
 import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/date-format'
@@ -24,7 +25,6 @@ import { BookingListPanel } from '@/app/(dashboard)/finance/validate/components/
 import { FinanceSummaryCard } from '@/app/(dashboard)/finance/validate/components/FinanceSummaryCard'
 import { CommissionSplitDialog } from '@/app/(dashboard)/finance/validate/components/CommissionSplitDialog'
 import { useFinanceValidate } from '@/app/(dashboard)/finance/validate/hooks/use-finance-validate'
-import { getBookingStatusMeta } from '@/lib/booking/status-label'
 
 const COMMISSION_NAME_PREFIX = 'Commission - '
 
@@ -182,11 +182,7 @@ export default function FinanceValidateClient() {
                 {selectedBooking.bookingRef || `#${selectedBooking.id}`}
               </div>
               <div className="mt-2">
-                <span
-                  className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getBookingStatusMeta(selectedBooking.status).className}`}
-                >
-                  {getBookingStatusMeta(selectedBooking.status).label}
-                </span>
+                <StatusBadge status={selectedBooking.status} className="text-[11px]" />
               </div>
               <div className="mt-1 text-xs text-slate-500">Tour Date: {formatDate(selectedBooking.tourDate)}</div>
             </div>

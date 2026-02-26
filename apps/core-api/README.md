@@ -16,6 +16,11 @@ Catalog read:
 - `GET /v1/catalog/items/{slug}`
 - `GET /v1/catalog/items/featured`
 
+Catalog read implementation:
+
+- DB-backed via `OPS_DB_URL` pada tabel `catalog_product`, `catalog_variant`, `catalog_variant_rate`.
+- Jika schema catalog belum tersedia, endpoint akan mengembalikan `CATALOG_READ_MODEL_NOT_READY`.
+
 Catalog editor (admin token + `x-admin-role`):
 
 - `GET /v1/catalog/items/id/{itemId}?includeInactive=true`
@@ -44,6 +49,13 @@ Catalog publish workflow gate:
 - output:
   - `reports/gates/catalog-publish-workflow/{timestamp}.json`
   - `reports/gates/catalog-publish-workflow/{timestamp}.md`
+
+Catalog editor CRUD smoke:
+
+- `pnpm --filter @bst/core-api smoke:catalog-editor`
+- output:
+  - `reports/smoke/catalog-editor/{timestamp}.json`
+  - `reports/smoke/catalog-editor/{timestamp}.md`
 
 ## Run
 

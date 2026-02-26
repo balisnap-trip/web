@@ -21,28 +21,111 @@ export interface WhatsAppMessage {
   linkPreview?: boolean
 }
 
+export interface WhatsAppSendOutcome {
+  success: boolean
+  error: string | null
+}
+
+const DEFAULT_GREENAPI_BASE_URL = 'https://7103.api.greenapi.com'
+const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
+const MAX_ERROR_SNIPPET_LENGTH = 240
+
+function parseEnabledValue(value: unknown): boolean | null {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (!normalized) return null
+    if (['1', 'true', 'yes', 'on', 'enabled'].includes(normalized)) return true
+    if (['0', 'false', 'no', 'off', 'disabled'].includes(normalized)) return false
+    return null
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'enabled' in value) {
+    const maybeEnabled = value as { enabled?: unknown }
+    return parseEnabledValue(maybeEnabled.enabled)
+  }
+
+  return null
+}
+
+function parseBoundedInt(value: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  const rounded = Math.floor(parsed)
+  if (rounded < min) return min
+  if (rounded > max) return max
+  return rounded
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 export class WhatsAppService {
   private config: WhatsAppConfig
+  private readonly sendMaxAttempts: number
+  private readonly requestTimeoutMs: number
 
   constructor(config?: Partial<WhatsAppConfig>) {
+    const baseUrlCandidate = String(
+      config?.baseUrl ?? process.env.GREENAPI_BASE_URL ?? DEFAULT_GREENAPI_BASE_URL
+    )
+      .trim()
+      .replace(/\/+$/, '')
+
     this.config = {
       instanceId: config?.instanceId ?? process.env.GREENAPI_INSTANCE_ID ?? '',
       apiToken: config?.apiToken ?? process.env.GREENAPI_API_TOKEN ?? '',
       groupChatId: config?.groupChatId ?? process.env.GREENAPI_GROUP_CHAT_ID ?? '',
-      baseUrl: config?.baseUrl ?? process.env.GREENAPI_BASE_URL ?? 'https://7103.api.greenapi.com',
+      baseUrl: baseUrlCandidate || DEFAULT_GREENAPI_BASE_URL,
       defaultCountryCode:
         (config?.defaultCountryCode ?? process.env.GREENAPI_DEFAULT_COUNTRY_CODE ?? '62')
           .replace(/\D/g, '') || '62',
     }
+    this.sendMaxAttempts = parseBoundedInt(process.env.GREENAPI_SEND_MAX_ATTEMPTS, 3, 1, 8)
+    this.requestTimeoutMs = parseBoundedInt(process.env.GREENAPI_REQUEST_TIMEOUT_MS, 20000, 1000, 120000)
+  }
+
+  private sanitizeErrorDetails(raw: string): string {
+    let value = String(raw || '').trim()
+    if (!value) return ''
+    if (this.config.apiToken) {
+      value = value.split(this.config.apiToken).join('***')
+    }
+    value = value.replace(/waInstance\d+/g, 'waInstance***')
+    if (value.length > MAX_ERROR_SNIPPET_LENGTH) {
+      value = `${value.slice(0, MAX_ERROR_SNIPPET_LENGTH)}...`
+    }
+    return value
+  }
+
+  private shouldRetry(status: number): boolean {
+    return RETRYABLE_HTTP_STATUSES.has(status)
+  }
+
+  private retryDelayMs(attempt: number): number {
+    return Math.min(5000, 400 * Math.pow(2, Math.max(0, attempt - 1)))
   }
 
   /**
    * Send message to WhatsApp group
    */
   async sendToGroup(message: string, linkPreview: boolean = true): Promise<boolean> {
+    const outcome = await this.sendToGroupDetailed(message, linkPreview)
+    return outcome.success
+  }
+
+  async sendToGroupDetailed(message: string, linkPreview: boolean = true): Promise<WhatsAppSendOutcome> {
     if (!this.config.groupChatId) {
       console.error('[WhatsApp] Missing GREEN-API group chat ID')
-      return false
+      return { success: false, error: 'Missing GREEN-API group chat ID' }
     }
     return this.sendMessage(this.config.groupChatId, message, linkPreview)
   }
@@ -51,6 +134,11 @@ export class WhatsAppService {
    * Send message to explicit chat ID
    */
   async sendToChat(chatId: string, message: string, linkPreview: boolean = true): Promise<boolean> {
+    const outcome = await this.sendToChatDetailed(chatId, message, linkPreview)
+    return outcome.success
+  }
+
+  async sendToChatDetailed(chatId: string, message: string, linkPreview: boolean = true): Promise<WhatsAppSendOutcome> {
     return this.sendMessage(chatId, message, linkPreview)
   }
 
@@ -58,10 +146,15 @@ export class WhatsAppService {
    * Send message to phone number (converted to @c.us chat ID)
    */
   async sendToPhone(phone: string, message: string, linkPreview: boolean = true): Promise<boolean> {
+    const outcome = await this.sendToPhoneDetailed(phone, message, linkPreview)
+    return outcome.success
+  }
+
+  async sendToPhoneDetailed(phone: string, message: string, linkPreview: boolean = true): Promise<WhatsAppSendOutcome> {
     const chatId = this.toPhoneChatId(phone)
     if (!chatId) {
       console.error('[WhatsApp] Invalid phone number:', phone)
-      return false
+      return { success: false, error: `Invalid phone number: ${String(phone || '').trim()}` }
     }
     return this.sendMessage(chatId, message, linkPreview)
   }
@@ -105,15 +198,19 @@ export class WhatsAppService {
   }
 
   async isEnabled(): Promise<boolean> {
-    let enabled = process.env.WHATSAPP_ENABLED !== 'false'
+    let enabled = parseEnabledValue(process.env.WHATSAPP_ENABLED)
+    if (enabled === null) {
+      enabled = true
+    }
+
     try {
       const setting = await prisma.systemSetting.findUnique({
         where: { key: 'whatsapp_enabled' },
         select: { value: true },
       })
-      if (setting?.value && typeof setting.value === 'object' && 'enabled' in setting.value) {
-        const value = setting.value as { enabled?: unknown }
-        enabled = Boolean(value.enabled)
+      const settingEnabled = parseEnabledValue(setting?.value)
+      if (settingEnabled !== null) {
+        enabled = settingEnabled
       }
     } catch {
       console.warn('[WhatsApp] Failed to read system setting, using env fallback')
@@ -121,10 +218,10 @@ export class WhatsAppService {
     return enabled
   }
 
-  private async sendMessage(chatId: string, message: string, linkPreview: boolean): Promise<boolean> {
+  private async sendMessage(chatId: string, message: string, linkPreview: boolean): Promise<WhatsAppSendOutcome> {
     if (!chatId) {
       console.error('[WhatsApp] Missing chat ID')
-      return false
+      return { success: false, error: 'Missing chat ID' }
     }
 
     const isEnabled = await this.isEnabled()
@@ -135,12 +232,12 @@ export class WhatsAppService {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
       console.log(message)
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-      return false
+      return { success: false, error: 'WhatsApp disabled by system setting' }
     }
 
     if (!this.config.instanceId || !this.config.apiToken) {
       console.error('[WhatsApp] Missing GREEN-API credentials')
-      return false
+      return { success: false, error: 'Missing GREEN-API credentials' }
     }
 
     const url = `${this.config.baseUrl}/waInstance${this.config.instanceId}/sendMessage/${this.config.apiToken}`
@@ -151,28 +248,67 @@ export class WhatsAppService {
       linkPreview,
     }
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
+    for (let attempt = 1; attempt <= this.sendMaxAttempts; attempt += 1) {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs)
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[WhatsApp] API Error:', response.status, errorText)
-        return false
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        })
+        clearTimeout(timeout)
+
+        if (!response.ok) {
+          const errorText = this.sanitizeErrorDetails(await response.text())
+          const lastError = errorText ? `HTTP ${response.status} - ${errorText}` : `HTTP ${response.status}`
+          console.error(
+            `[WhatsApp] API Error (attempt ${attempt}/${this.sendMaxAttempts}):`,
+            response.status,
+            errorText || '<empty>'
+          )
+
+          if (attempt < this.sendMaxAttempts && this.shouldRetry(response.status)) {
+            await wait(this.retryDelayMs(attempt))
+            continue
+          }
+
+          return { success: false, error: lastError }
+        }
+
+        const result = await response.json().catch(() => null)
+        console.log('[WhatsApp] Message sent successfully:', result ?? { ok: true })
+        return { success: true, error: null }
+      } catch (error) {
+        clearTimeout(timeout)
+        const errName = error instanceof Error ? error.name : ''
+        const rawMessage =
+          errName === 'AbortError'
+            ? `Request timeout after ${this.requestTimeoutMs}ms`
+            : error instanceof Error
+            ? error.message
+              : String(error)
+        const sanitized = this.sanitizeErrorDetails(rawMessage)
+        const lastError = sanitized || 'Unknown request error'
+        console.error(
+          `[WhatsApp] Error sending message (attempt ${attempt}/${this.sendMaxAttempts}):`,
+          sanitized || error
+        )
+
+        if (attempt < this.sendMaxAttempts) {
+          await wait(this.retryDelayMs(attempt))
+          continue
+        }
+
+        return { success: false, error: lastError }
       }
-
-      const result = await response.json()
-      console.log('[WhatsApp] Message sent successfully:', result)
-      return true
-    } catch (error) {
-      console.error('[WhatsApp] Error sending message:', error)
-      return false
     }
+
+    return { success: false, error: 'Unknown send result' }
   }
 
   /**

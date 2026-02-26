@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/date-format'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -452,20 +453,20 @@ export default function FinanceSettlementsPage() {
 
       <Card className="p-4">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-600">
-              <tr>
-                <th className="px-3 py-2 text-left">Booking</th>
-                <th className="px-3 py-2 text-left">Item</th>
-                <th className="px-3 py-2 text-left">Counterparty</th>
-                <th className="px-3 py-2 text-right">Amount</th>
-                <th className="px-3 py-2 text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
+          <Table className="text-sm">
+            <TableHeader className="bg-gray-50 text-gray-600">
+              <TableRow>
+                <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Booking</TableHead>
+                <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Item</TableHead>
+                <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Counterparty</TableHead>
+                <TableHead className="px-3 py-2 text-right normal-case tracking-normal text-gray-600">Amount</TableHead>
+                <TableHead className="px-3 py-2 text-right normal-case tracking-normal text-gray-600"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {items.map((item) => (
-                <tr key={item.id} className="border-t">
-                  <td className="px-3 py-2">
+                <TableRow key={item.id}>
+                  <TableCell className="px-3 py-2">
                     <div className="font-medium text-gray-900">
                       {item.bookingFinance.booking.bookingRef || `#${item.bookingFinance.booking.id}`}
                     </div>
@@ -474,8 +475,8 @@ export default function FinanceSettlementsPage() {
                       {item.bookingFinance.booking.package?.packageName}
                     </div>
                     <div className="text-xs text-gray-500">Tour Date: {formatDate(item.bookingFinance.booking.tourDate)}</div>
-                  </td>
-                  <td className="px-3 py-2">
+                  </TableCell>
+                  <TableCell className="px-3 py-2">
                     <div className="font-medium text-gray-900">{item.nameSnapshot}</div>
                     <div className="text-xs text-gray-500">
                       {item.tourItemCategoryNameSnapshot || 'Uncategorized'}
@@ -486,8 +487,8 @@ export default function FinanceSettlementsPage() {
                     {item.notes ? (
                       <div className="text-[11px] text-gray-400 mt-1">Note: {item.notes}</div>
                     ) : null}
-                  </td>
-                  <td className="px-3 py-2">
+                  </TableCell>
+                  <TableCell className="px-3 py-2">
                     <div className="text-sm text-gray-700">
                       {item.driver?.name ? `Driver: ${item.driver.name}` : ''}
                     </div>
@@ -497,30 +498,30 @@ export default function FinanceSettlementsPage() {
                     {!item.driver?.name && !item.partner?.name && (
                       <div className="text-sm text-gray-400">-</div>
                     )}
-                  </td>
-                  <td className="px-3 py-2 text-right">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-right">
                     <span className={item.direction === 'INCOME' ? 'text-emerald-600' : 'text-slate-900'}>
                       {item.direction === 'INCOME' ? '+' : '-'}
                       {formatCurrency(item.amount, 'IDR')}
                     </span>
-                  </td>
-                  <td className="px-3 py-2 text-right">
+                  </TableCell>
+                  <TableCell className="px-3 py-2 text-right">
                     <Button size="sm" onClick={() => openPayModalForItem(item)}>
                       <HandCoins className="h-4 w-4 mr-1" />
                       Mark Paid
                     </Button>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
               {items.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-center text-sm text-gray-500">
+                <TableRow>
+                  <TableCell colSpan={5} className="px-3 py-6 text-center text-sm text-gray-500">
                     No unpaid items.
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
       </Card>
 
@@ -605,84 +606,84 @@ export default function FinanceSettlementsPage() {
 
                 {selectedGroup.type === 'Partner' ? (
                   <div className="max-h-80 overflow-auto rounded-lg border border-gray-200">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                        <tr>
-                          <th className="px-3 py-2 text-left">Date</th>
-                          <th className="px-3 py-2 text-left">Guest</th>
-                          <th className="px-3 py-2 text-left">Pax</th>
-                          <th className="px-3 py-2 text-right">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
+                    <Table className="text-sm">
+                      <TableHeader className="bg-gray-50 text-xs uppercase text-gray-500">
+                        <TableRow>
+                          <TableHead className="px-3 py-2 text-left">Date</TableHead>
+                          <TableHead className="px-3 py-2 text-left">Guest</TableHead>
+                          <TableHead className="px-3 py-2 text-left">Pax</TableHead>
+                          <TableHead className="px-3 py-2 text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="divide-y divide-gray-200">
                         {selectedGroupBookings.map((booking) => (
-                          <tr key={booking.bookingId}>
-                            <td className="whitespace-nowrap px-3 py-2">{formatDate(booking.tourDate)}</td>
-                            <td className="px-3 py-2">{booking.guestName}</td>
-                            <td className="px-3 py-2">{booking.paxCount} Pax</td>
-                            <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-gray-900">
+                          <TableRow key={booking.bookingId}>
+                            <TableCell className="whitespace-nowrap px-3 py-2">{formatDate(booking.tourDate)}</TableCell>
+                            <TableCell className="px-3 py-2">{booking.guestName}</TableCell>
+                            <TableCell className="px-3 py-2">{booking.paxCount} Pax</TableCell>
+                            <TableCell className="whitespace-nowrap px-3 py-2 text-right font-semibold text-gray-900">
                               {formatCurrency(booking.netAmount, 'IDR')}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
                         {selectedGroupBookings.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500">
+                          <TableRow>
+                            <TableCell colSpan={4} className="px-3 py-8 text-center text-sm text-gray-500">
                               No detail lines.
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ) : null}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 ) : (
                   <div className="max-h-80 overflow-auto rounded-lg border border-gray-200">
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                        <tr>
-                          <th className="px-3 py-2 text-left">Date</th>
-                          <th className="px-3 py-2 text-left">Booking</th>
-                          <th className="px-3 py-2 text-left">Item</th>
-                          <th className="px-3 py-2 text-left">Type</th>
-                          <th className="px-3 py-2 text-right">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-200">
+                    <Table className="text-sm">
+                      <TableHeader className="bg-gray-50 text-xs uppercase text-gray-500">
+                        <TableRow>
+                          <TableHead className="px-3 py-2 text-left">Date</TableHead>
+                          <TableHead className="px-3 py-2 text-left">Booking</TableHead>
+                          <TableHead className="px-3 py-2 text-left">Item</TableHead>
+                          <TableHead className="px-3 py-2 text-left">Type</TableHead>
+                          <TableHead className="px-3 py-2 text-right">Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="divide-y divide-gray-200">
                         {selectedGroupBookings.flatMap((booking) =>
                           booking.items.map((item) => (
-                            <tr key={item.id}>
-                              <td className="whitespace-nowrap px-3 py-2">{formatDate(booking.tourDate)}</td>
-                              <td className="px-3 py-2">
+                            <TableRow key={item.id}>
+                              <TableCell className="whitespace-nowrap px-3 py-2">{formatDate(booking.tourDate)}</TableCell>
+                              <TableCell className="px-3 py-2">
                                 <div className="font-medium text-gray-900">{booking.bookingRef || `#${booking.bookingId}`}</div>
                                 <div className="text-xs text-gray-500">{booking.tourName || '-'}</div>
-                              </td>
-                              <td className="px-3 py-2">
+                              </TableCell>
+                              <TableCell className="px-3 py-2">
                                 <div className="font-medium text-gray-900">{item.nameSnapshot}</div>
                                 <div className="text-xs text-gray-500">{item.tourItemCategoryNameSnapshot || 'Uncategorized'}</div>
                                 {item.notes ? <div className="text-[11px] text-gray-400">Note: {item.notes}</div> : null}
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-2">
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap px-3 py-2">
                                 <span
                                   className={item.direction === 'EXPENSE' ? 'font-semibold text-emerald-700' : 'font-semibold text-rose-700'}
                                 >
                                   {item.direction === 'EXPENSE' ? 'PAY' : 'COLLECT'}
                                 </span>
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-2 text-right font-semibold text-gray-900">
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap px-3 py-2 text-right font-semibold text-gray-900">
                                 {formatCurrency(item.amount, 'IDR')}
-                              </td>
-                            </tr>
+                              </TableCell>
+                            </TableRow>
                           ))
                         )}
                         {selectedGroup.items.length === 0 ? (
-                          <tr>
-                            <td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-500">
+                          <TableRow>
+                            <TableCell colSpan={5} className="px-3 py-8 text-center text-sm text-gray-500">
                               No detail lines.
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ) : null}
-                      </tbody>
-                    </table>
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
               </div>

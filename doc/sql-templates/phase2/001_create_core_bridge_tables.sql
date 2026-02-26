@@ -48,6 +48,14 @@ create table if not exists catalog_product (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists catalog_product_content (
+  product_key uuid primary key references catalog_product(product_key) on delete cascade,
+  payload jsonb not null default '{}'::jsonb,
+  updated_by varchar(191),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists catalog_variant (
   variant_key uuid primary key,
   product_key uuid not null references catalog_product(product_key),

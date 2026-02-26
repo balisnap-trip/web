@@ -415,13 +415,12 @@ export async function POST(
     }
 
     if (sendType === 'READY_PARTNERS') {
-      const partnerMap = new Map<number, { id: number; name: string; picName: string | null; picWhatsapp: string | null }>()
+      const partnerMap = new Map<number, { id: number; name: string; picWhatsapp: string | null }>()
       for (const item of booking.finance?.items || []) {
         if (item.partner) {
           partnerMap.set(item.partner.id, {
             id: item.partner.id,
             name: item.partner.name,
-            picName: item.partner.picName,
             picWhatsapp: item.partner.picWhatsapp,
           })
         }
@@ -434,7 +433,7 @@ export async function POST(
       await Promise.all(
         [...partnerMap.values()].map(async (partner) => {
           const msg = renderFromTemplate('whatsapp_template_ready_partner_xml', templateXmlMap, {
-            partner_name: partner.picName || partner.name,
+            partner_name: partner.name || '-',
             booking_ref: bookingRef,
             package_name: tourName,
             tour_date_time: tourDateLabel,
@@ -528,13 +527,12 @@ export async function POST(
       }
 
       const monthKey = monthKeyInBali(booking.tourDate)
-      const partnerMap = new Map<number, { id: number; name: string; picName: string | null; picWhatsapp: string | null }>()
+      const partnerMap = new Map<number, { id: number; name: string; picWhatsapp: string | null }>()
       for (const item of booking.finance?.items || []) {
         if (item.partner) {
           partnerMap.set(item.partner.id, {
             id: item.partner.id,
             name: item.partner.name,
-            picName: item.partner.picName,
             picWhatsapp: item.partner.picWhatsapp,
           })
         }
@@ -569,7 +567,7 @@ export async function POST(
         [...partnerMap.values()].map(async (partner) => {
           const invoiceUrl = `${baseUrl}/print/invoice/vendor?partnerId=${partner.id}&month=${monthKey}&includePaid=1&autoPrint=0`
           const msg = renderFromTemplate('whatsapp_template_done_partner_invoice_xml', templateXmlMap, {
-            partner_name: partner.picName || partner.name,
+            partner_name: partner.name || '-',
             booking_ref: bookingRef,
             invoice_url: invoiceUrl,
           })
@@ -688,18 +686,26 @@ export async function POST(
       }
 
       let sent = false
+      let greenApiError: string | null = null
       if (draft.chatType === 'group') {
-        sent = await whatsapp.sendToGroup(finalMessage)
+        const outcome = await whatsapp.sendToGroupDetailed(finalMessage)
+        sent = outcome.success
+        greenApiError = outcome.error
       } else if (draft.chatId) {
-        sent = await whatsapp.sendToChat(draft.chatId, finalMessage)
+        const outcome = await whatsapp.sendToChatDetailed(draft.chatId, finalMessage)
+        sent = outcome.success
+        greenApiError = outcome.error
       }
+      const failureMessage = greenApiError
+        ? `Gagal kirim ke GREEN-API (${greenApiError})`
+        : 'Gagal kirim ke GREEN-API'
 
       results.push({
         id: draft.id,
         target: draft.target,
         phone: draft.phone,
         success: sent,
-        message: sent ? 'Terkirim' : 'Gagal kirim ke GREEN-API',
+        message: sent ? 'Terkirim' : failureMessage,
       })
     }
 

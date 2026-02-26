@@ -20,6 +20,40 @@ export interface CatalogVariantDto {
   rates: CatalogRateDto[];
 }
 
+export interface CatalogItemSlideDto {
+  url: string;
+  altText: string | null;
+  isCover: boolean;
+  sortOrder: number;
+}
+
+export interface CatalogItemItineraryEntryDto {
+  variantId: string | null;
+  day: number;
+  sortOrder: number;
+  title: string;
+  description: string | null;
+  location: string | null;
+  startTime: string | null;
+  endTime: string | null;
+}
+
+export interface CatalogItemFaqEntryDto {
+  question: string;
+  answer: string;
+}
+
+export interface CatalogItemContentDto {
+  slides: CatalogItemSlideDto[];
+  itinerary: CatalogItemItineraryEntryDto[];
+  highlights: string[];
+  inclusions: string[];
+  exclusions: string[];
+  additionalInfo: string[];
+  optionalFeatures: string[];
+  faqs: CatalogItemFaqEntryDto[];
+}
+
 export interface CatalogItemDto {
   itemId: string;
   slug: string;
@@ -28,6 +62,7 @@ export interface CatalogItemDto {
   isActive: boolean;
   isFeatured: boolean;
   thumbnailUrl: string | null;
+  content?: CatalogItemContentDto;
   variants: CatalogVariantDto[];
 }
 
@@ -65,6 +100,7 @@ export interface CatalogItemCreateInput {
   isActive?: boolean;
   isFeatured?: boolean;
   thumbnailUrl?: string | null;
+  variants?: CatalogVariantCreateInput[];
 }
 
 export interface CatalogItemPatchInput {
@@ -109,6 +145,10 @@ export interface CatalogRatePatchInput {
   isActive?: boolean;
 }
 
+export interface CatalogItemContentPatchInput {
+  content: unknown;
+}
+
 function readCoreApiBaseUrl() {
   return process.env.CORE_API_BASE_URL?.trim() || "http://127.0.0.1:4000";
 }
@@ -123,6 +163,11 @@ function readAdminRole() {
 
 function readPublishSecret() {
   return process.env.CORE_API_PUBLISH_SECRET?.trim() || "";
+}
+
+function normalizeActor(actor: string | undefined): string {
+  const normalized = actor?.trim();
+  return normalized || "content-manager";
 }
 
 function resolveUrl(path: string, query?: Record<string, string | undefined>) {
@@ -172,6 +217,7 @@ async function coreApiRequest<T>(
     body?: unknown;
     adminAuth?: boolean;
     signPublish?: boolean;
+    actor?: string;
   }
 ): Promise<T> {
   const method = options?.method || "GET";
@@ -189,7 +235,7 @@ async function coreApiRequest<T>(
     }
     headers.authorization = `Bearer ${token}`;
     headers["x-admin-role"] = readAdminRole();
-    headers["x-actor"] = "content-manager";
+    headers["x-actor"] = normalizeActor(options.actor);
   }
 
   if (options?.signPublish) {
@@ -250,127 +296,175 @@ export async function fetchCatalogItemById(itemId: string, includeInactive = tru
   });
 }
 
-export async function createCatalogItem(input: CatalogItemCreateInput) {
+export async function createCatalogItem(input: CatalogItemCreateInput, options?: { actor?: string }) {
   return coreApiRequest<CatalogItemDto>("/v1/catalog/items", {
     method: "POST",
     adminAuth: true,
-    body: input
+    body: input,
+    actor: options?.actor
   });
 }
 
-export async function updateCatalogItem(itemId: string, input: CatalogItemPatchInput) {
+export async function updateCatalogItem(
+  itemId: string,
+  input: CatalogItemPatchInput,
+  options?: { actor?: string }
+) {
   return coreApiRequest<CatalogItemDto>(`/v1/catalog/items/${itemId}`, {
     method: "PATCH",
     adminAuth: true,
-    body: input
+    body: input,
+    actor: options?.actor
   });
 }
 
-export async function deactivateCatalogItem(itemId: string) {
+export async function updateCatalogItemContent(
+  itemId: string,
+  input: CatalogItemContentPatchInput,
+  options?: { actor?: string }
+) {
+  return coreApiRequest<CatalogItemDto>(`/v1/catalog/items/${itemId}/content`, {
+    method: "PATCH",
+    adminAuth: true,
+    body: input,
+    actor: options?.actor
+  });
+}
+
+export async function deactivateCatalogItem(itemId: string, options?: { actor?: string }) {
   return coreApiRequest<CatalogItemDto>(`/v1/catalog/items/${itemId}`, {
     method: "DELETE",
-    adminAuth: true
+    adminAuth: true,
+    actor: options?.actor
   });
 }
 
-export async function createCatalogVariant(itemId: string, input: CatalogVariantCreateInput) {
+export async function createCatalogVariant(
+  itemId: string,
+  input: CatalogVariantCreateInput,
+  options?: { actor?: string }
+) {
   return coreApiRequest<CatalogItemDto>(`/v1/catalog/items/${itemId}/variants`, {
     method: "POST",
     adminAuth: true,
-    body: input
+    body: input,
+    actor: options?.actor
   });
 }
 
-export async function updateCatalogVariant(variantId: string, input: CatalogVariantPatchInput) {
+export async function updateCatalogVariant(
+  variantId: string,
+  input: CatalogVariantPatchInput,
+  options?: { actor?: string }
+) {
   return coreApiRequest<CatalogItemDto>(`/v1/catalog/variants/${variantId}`, {
     method: "PATCH",
     adminAuth: true,
-    body: input
+    body: input,
+    actor: options?.actor
   });
 }
 
-export async function deactivateCatalogVariant(variantId: string) {
+export async function deactivateCatalogVariant(variantId: string, options?: { actor?: string }) {
   return coreApiRequest<CatalogItemDto>(`/v1/catalog/variants/${variantId}`, {
     method: "DELETE",
-    adminAuth: true
+    adminAuth: true,
+    actor: options?.actor
   });
 }
 
-export async function createCatalogRate(variantId: string, input: CatalogRateCreateInput) {
+export async function createCatalogRate(
+  variantId: string,
+  input: CatalogRateCreateInput,
+  options?: { actor?: string }
+) {
   return coreApiRequest<CatalogItemDto>(`/v1/catalog/variants/${variantId}/rates`, {
     method: "POST",
     adminAuth: true,
-    body: input
+    body: input,
+    actor: options?.actor
   });
 }
 
-export async function updateCatalogRate(rateId: string, input: CatalogRatePatchInput) {
+export async function updateCatalogRate(
+  rateId: string,
+  input: CatalogRatePatchInput,
+  options?: { actor?: string }
+) {
   return coreApiRequest<CatalogItemDto>(`/v1/catalog/rates/${rateId}`, {
     method: "PATCH",
     adminAuth: true,
-    body: input
+    body: input,
+    actor: options?.actor
   });
 }
 
-export async function deactivateCatalogRate(rateId: string) {
+export async function deactivateCatalogRate(rateId: string, options?: { actor?: string }) {
   return coreApiRequest<CatalogItemDto>(`/v1/catalog/rates/${rateId}`, {
     method: "DELETE",
-    adminAuth: true
+    adminAuth: true,
+    actor: options?.actor
   });
 }
 
-export async function listCatalogPublishJobs(limit = 50) {
+export async function listCatalogPublishJobs(limit = 50, options?: { actor?: string }) {
   return coreApiRequest<CatalogPublishJobDto[]>("/v1/catalog/publish/jobs", {
     method: "GET",
     query: {
       limit: String(limit)
     },
-    adminAuth: true
+    adminAuth: true,
+    actor: options?.actor
   });
 }
 
-export async function getCatalogPublishJob(jobId: string) {
+export async function getCatalogPublishJob(jobId: string, options?: { actor?: string }) {
   return coreApiRequest<CatalogPublishJobDto>(`/v1/catalog/publish/jobs/${jobId}`, {
     method: "GET",
-    adminAuth: true
+    adminAuth: true,
+    actor: options?.actor
   });
 }
 
 export async function createCatalogPublishJob(input: {
   itemIds?: string[];
   note?: string;
-}) {
+}, options?: { actor?: string }) {
   return coreApiRequest<CatalogPublishJobDto>("/v1/catalog/publish/jobs", {
     method: "POST",
     adminAuth: true,
     signPublish: true,
-    body: input
+    body: input,
+    actor: options?.actor
   });
 }
 
-export async function submitCatalogPublishReview(jobId: string) {
+export async function submitCatalogPublishReview(jobId: string, options?: { actor?: string }) {
   return coreApiRequest<CatalogPublishJobDto>(`/v1/catalog/publish/jobs/${jobId}/submit-review`, {
     method: "POST",
     adminAuth: true,
     signPublish: true,
-    body: {}
+    body: {},
+    actor: options?.actor
   });
 }
 
-export async function publishCatalogJob(jobId: string) {
+export async function publishCatalogJob(jobId: string, options?: { actor?: string }) {
   return coreApiRequest<CatalogPublishJobDto>(`/v1/catalog/publish/jobs/${jobId}/publish`, {
     method: "POST",
     adminAuth: true,
     signPublish: true,
-    body: {}
+    body: {},
+    actor: options?.actor
   });
 }
 
-export async function retryCatalogPublishJob(jobId: string) {
+export async function retryCatalogPublishJob(jobId: string, options?: { actor?: string }) {
   return coreApiRequest<CatalogPublishJobDto>(`/v1/catalog/publish/jobs/${jobId}/retry`, {
     method: "POST",
     adminAuth: true,
     signPublish: true,
-    body: {}
+    body: {},
+    actor: options?.actor
   });
 }

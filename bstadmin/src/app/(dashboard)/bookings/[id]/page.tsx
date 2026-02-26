@@ -7,6 +7,9 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { SourceBadge } from '@/components/ui/source-badge'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
@@ -31,7 +34,6 @@ import {
   Edit,
   Trash2,
   AlertCircle,
-  RefreshCw,
   Wallet,
   Shapes,
   Package,
@@ -955,35 +957,14 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
       </Card>
 
       {/* Status Banner */}
-      <Card className={`p-4 border-l-4 transition-shadow duration-200 hover:shadow-md ${
-        booking.status === 'READY' ? 'border-l-blue-500 bg-gradient-to-r from-blue-50 to-blue-50/30' :
-        booking.status === 'ATTENTION' ? 'border-l-amber-500 bg-gradient-to-r from-amber-50 to-amber-50/30' :
-        booking.status === 'UPDATED' ? 'border-l-indigo-500 bg-gradient-to-r from-indigo-50 to-indigo-50/30' :
-        booking.status === 'COMPLETED' ? 'border-l-green-500 bg-gradient-to-r from-green-50 to-green-50/30' :
-        booking.status === 'DONE' ? 'border-l-emerald-500 bg-gradient-to-r from-emerald-50 to-emerald-50/30' :
-        booking.status === 'CANCELLED' ? 'border-l-red-500 bg-gradient-to-r from-red-50 to-red-50/30' :
-        'border-l-gray-500 bg-gradient-to-r from-gray-50 to-gray-50/30'
-      }`}>
+      <Card className="p-4 border-l-4 border-l-slate-300 bg-gradient-to-r from-slate-50 to-white transition-shadow duration-200 hover:shadow-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${
-              booking.status === 'READY' ? 'bg-blue-100' :
-              booking.status === 'ATTENTION' ? 'bg-amber-100' :
-              booking.status === 'UPDATED' ? 'bg-indigo-100' :
-              booking.status === 'COMPLETED' ? 'bg-green-100' :
-              booking.status === 'DONE' ? 'bg-emerald-100' :
-              booking.status === 'CANCELLED' ? 'bg-red-100' :
-              'bg-gray-100'
-            }`}>
-              {booking.status === 'READY' && <Clock className="h-5 w-5 text-blue-600" />}
-              {booking.status === 'ATTENTION' && <AlertCircle className="h-5 w-5 text-amber-600" />}
-              {booking.status === 'UPDATED' && <RefreshCw className="h-5 w-5 text-indigo-600" />}
-              {booking.status === 'COMPLETED' && <CheckCircle className="h-5 w-5 text-green-600" />}
-              {booking.status === 'DONE' && <CheckCircle className="h-5 w-5 text-emerald-600" />}
-              {booking.status === 'CANCELLED' && <XCircle className="h-5 w-5 text-red-600" />}
-            </div>
             <div>
-              <div className="font-semibold text-gray-900">Status: <span className="uppercase">{booking.status}</span></div>
+              <div className="flex items-center gap-2 font-semibold text-gray-900">
+                <span>Status:</span>
+                <StatusBadge status={booking.status} label={booking.status} showIcon className="font-bold" />
+              </div>
               {booking.isPaid && (
                 <div className="text-sm text-gray-600 flex items-center gap-1">
                   <CheckCircle className="h-3 w-3 text-green-600" />
@@ -1108,9 +1089,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mb-4">
               <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Source</span>
-                <span className="inline-flex px-2.5 py-1 text-xs font-bold rounded-full bg-indigo-100 text-indigo-800">
-                  {booking.source}
-                </span>
+                <SourceBadge source={booking.source} label={booking.source} className="font-bold" />
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-gray-50">
                 <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Booking Date</span>
@@ -2176,22 +2155,22 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <div className="py-10 text-center text-sm text-gray-600">No matching emails found.</div>
           ) : (
             <div className="max-h-80 overflow-y-auto border rounded-lg">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Select</th>
-                    <th className="px-3 py-2 text-left">Subject</th>
-                    <th className="px-3 py-2 text-left">From</th>
-                    <th className="px-3 py-2 text-left">Received</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table className="text-sm">
+                <TableHeader className="bg-gray-50 border-b">
+                  <TableRow>
+                    <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Select</TableHead>
+                    <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Subject</TableHead>
+                    <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">From</TableHead>
+                    <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Received</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {reparseEmails.map((email) => (
-                    <tr
+                    <TableRow
                       key={email.id}
-                      className="border-b last:border-b-0 hover:bg-gray-50"
+                      className="hover:bg-gray-50"
                     >
-                      <td className="px-3 py-2">
+                      <TableCell className="px-3 py-2">
                         <Checkbox
                           checked={selectedEmailIds.includes(email.id)}
                           onChange={(e) => {
@@ -2202,8 +2181,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
                             )
                           }}
                         />
-                      </td>
-                      <td className="px-3 py-2">
+                      </TableCell>
+                      <TableCell className="px-3 py-2">
                         <div className="font-medium text-gray-900">{email.subject}</div>
                         {email.errorMessage && (
                           <div className="text-xs text-red-600">
@@ -2213,15 +2192,15 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
                         {email.bookingLinked && (
                           <div className="text-xs text-blue-600">Linked to booking</div>
                         )}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600">{email.from}</td>
-                      <td className="px-3 py-2 text-gray-600">
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-gray-600">{email.from}</TableCell>
+                      <TableCell className="px-3 py-2 text-gray-600">
                         {formatDateTime(email.receivedAt)}
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
 

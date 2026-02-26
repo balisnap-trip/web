@@ -23,13 +23,15 @@
     "db:sync:from-server": "node scripts/sync-db-from-server.mjs",
     "gate:ops-read-parity": "node scripts/ops-read-parity-gate.mjs",
     "drill:ops-assignment-sync": "node scripts/ops-assignment-sync-drill.mjs",
+    "gate:ui-release-checklist": "node scripts/ui-release-checklist-gate.mjs",
     "gate:write-cutover": "node scripts/write-cutover-mismatch-gate.mjs",
     "check:users": "tsx scripts/check-users.ts",
     "reset:errors": "tsx scripts/reset-booking-email-errors.ts",
     "fresh:start": "tsx scripts/fresh-start-cleanup.ts",
     "reprocess:bookings": "tsx scripts/reprocess-booking-emails.ts",
     "re-evaluate": "tsx scripts/re-evaluate-booking-emails.ts",
-    "test:specific": "tsx scripts/test-specific-bookings.ts"
+    "test:specific": "tsx scripts/test-specific-bookings.ts",
+    "test:bokun-parser": "tsx scripts/test-bokun-parser-direct.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

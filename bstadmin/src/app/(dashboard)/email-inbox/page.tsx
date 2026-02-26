@@ -5,8 +5,18 @@ import Link from 'next/link'
 import { formatDateTime } from '@/lib/date-format'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { SourceBadge } from '@/components/ui/source-badge'
 import { ModuleTabs } from '@/components/layout/module-tabs'
 import { Progress } from '@/components/ui/progress'
+import {
+  DataTableShell,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Mail, RefreshCw, CheckCircle, XCircle, AlertCircle, Clock, Send, Eye } from 'lucide-react'
 import { useNotifications } from '@/hooks/use-notifications'
 
@@ -359,7 +369,7 @@ export default function EmailInboxPage() {
       </div>
 
       {/* Recent Emails Table */}
-      <Card>
+      <DataTableShell>
         <div className="p-4 border-b flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold text-gray-900">Emails</h2>
           <div className="flex gap-2">
@@ -391,121 +401,103 @@ export default function EmailInboxPage() {
             </Button>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  View
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Subject
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  From
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Source
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Received
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Booking Email
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Linked Bookings
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredEmails.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                    No emails found for this tab.
-                  </td>
-                </tr>
-              ) : (
-                filteredEmails.map((email) => (
-                  <tr key={email.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-4 whitespace-nowrap">
-                      <Link href={`/email-inbox/${email.id}`}>
-                        <Button variant="outline" size="sm" className="hover:bg-blue-50">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900 truncate max-w-md">
-                        {email.subject}
-                      </div>
-                      {email.errorMessage && (
-                        <div className="text-xs text-red-600 mt-1 truncate max-w-md">
-                          Error: {email.errorMessage}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-600 truncate max-w-xs">
-                        {email.from}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {email.source}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-600">
-                      {formatDateTime(email.receivedAt)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <Button
-                        type="button"
-                        onClick={() => handleToggleBookingEmail(email.id, email.isBookingEmail)}
-                        variant="secondary"
-                        size="sm"
-                        className={`h-auto inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full transition-colors ${
-                          email.isBookingEmail
-                            ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {email.isBookingEmail ? (
-                          <><CheckCircle className="h-3 w-3" /> Yes</>
-                        ) : (
-                          <><XCircle className="h-3 w-3" /> No</>
-                        )}
+        <Table>
+          <TableHeader className="bg-gray-50 border-b">
+            <TableRow>
+              <TableHead className="px-4 py-3 font-medium">View</TableHead>
+              <TableHead className="py-3 font-medium">Subject</TableHead>
+              <TableHead className="py-3 font-medium">From</TableHead>
+              <TableHead className="py-3 font-medium">Source</TableHead>
+              <TableHead className="py-3 font-medium">Received</TableHead>
+              <TableHead className="py-3 font-medium">Booking Email</TableHead>
+              <TableHead className="py-3 font-medium">Linked Bookings</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody className="bg-white divide-y divide-gray-200">
+            {filteredEmails.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="py-12 text-center text-gray-500">
+                  No emails found for this tab.
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredEmails.map((email) => (
+                <TableRow key={email.id} className="hover:bg-gray-50">
+                  <TableCell className="px-4 whitespace-nowrap">
+                    <Link href={`/email-inbox/${email.id}`}>
+                      <Button variant="outline" size="sm" className="hover:bg-blue-50">
+                        <Eye className="h-4 w-4" />
                       </Button>
-                    </td>
-                    <td className="px-6 py-4">
-                      {email.bookingEmails.length > 0 ? (
-                        <div className="text-sm">
-                          {email.bookingEmails.map((be, idx) => (
-                            <div key={idx} className="flex items-center gap-2">
-                              <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded ${
-                                be.relationType === 'CREATED' ? 'bg-blue-100 text-blue-800' :
-                                be.relationType === 'UPDATED' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {be.relationType}
-                              </span>
-                              <span className="text-xs text-gray-600">
-                                {be.booking.bookingRef || 'N/A'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm font-medium text-gray-900 truncate max-w-md">
+                      {email.subject}
+                    </div>
+                    {email.errorMessage && (
+                      <div className="text-xs text-red-600 mt-1 truncate max-w-md">
+                        Error: {email.errorMessage}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm text-gray-600 truncate max-w-xs">
+                      {email.from}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <SourceBadge source={email.source} label={email.source} />
+                  </TableCell>
+                  <TableCell className="text-sm text-gray-600">
+                    {formatDateTime(email.receivedAt)}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      type="button"
+                      onClick={() => handleToggleBookingEmail(email.id, email.isBookingEmail)}
+                      variant="secondary"
+                      size="sm"
+                      className={`h-auto inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full transition-colors ${
+                        email.isBookingEmail
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {email.isBookingEmail ? (
+                        <><CheckCircle className="h-3 w-3" /> Yes</>
                       ) : (
-                        <span className="text-xs text-gray-400">None</span>
+                        <><XCircle className="h-3 w-3" /> No</>
                       )}
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                    </Button>
+                  </TableCell>
+                  <TableCell>
+                    {email.bookingEmails.length > 0 ? (
+                      <div className="text-sm">
+                        {email.bookingEmails.map((be, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <span className={`inline-flex px-2 py-0.5 text-xs font-semibold rounded ${
+                              be.relationType === 'CREATED' ? 'bg-blue-100 text-blue-800' :
+                              be.relationType === 'UPDATED' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                            }`}>
+                              {be.relationType}
+                            </span>
+                            <span className="text-xs text-gray-600">
+                              {be.booking.bookingRef || 'N/A'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">None</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </DataTableShell>
 
       {/* Info Card */}
       <Card className="p-4 bg-blue-50 border-blue-200">

@@ -72,6 +72,14 @@ export class CatalogPublishService implements OnModuleInit {
   );
   private readonly driftWindowMs = this.readMinutes(process.env.CATALOG_PUBLISH_TIMESTAMP_DRIFT_MINUTES, 5) * 60 * 1000;
   private readonly nonceTtlMs = this.readMinutes(process.env.CATALOG_PUBLISH_NONCE_TTL_MINUTES, 10) * 60 * 1000;
+  private readonly reviewerMustDifferFromCreator = this.readBoolean(
+    process.env.CATALOG_PUBLISH_REVIEWER_MUST_DIFFER_FROM_CREATOR,
+    false
+  );
+  private readonly publisherMustDifferFromReviewer = this.readBoolean(
+    process.env.CATALOG_PUBLISH_PUBLISHER_MUST_DIFFER_FROM_REVIEWER,
+    false
+  );
   private readonly seenNonce = new Map<string, number>();
   private persistQueue: Promise<void> = Promise.resolve();
 
@@ -253,12 +261,16 @@ export class CatalogPublishService implements OnModuleInit {
     if (job.status !== "DRAFT" && job.status !== "FAILED") {
       throw new ConflictException(`CATALOG_PUBLISH_JOB_STATUS_INVALID:${job.status}`);
     }
+    const normalizedActor = this.normalizeActor(actor);
+    if (this.reviewerMustDifferFromCreator && this.isSameActor(normalizedActor, job.createdBy)) {
+      throw new ConflictException("CATALOG_PUBLISH_REVIEWER_MUST_DIFFER_FROM_CREATOR");
+    }
 
     const now = new Date().toISOString();
     const updated: CatalogPublishJob = {
       ...job,
       status: "IN_REVIEW",
-      reviewedBy: this.normalizeActor(actor),
+      reviewedBy: normalizedActor,
       updatedAt: now,
       failureReason: null
     };
@@ -267,7 +279,7 @@ export class CatalogPublishService implements OnModuleInit {
 
     this.auditService.record({
       eventType: "CATALOG_PUBLISH_JOB_SUBMITTED_REVIEW",
-      actor: this.normalizeActor(actor),
+      actor: normalizedActor,
       resourceType: "CATALOG_PUBLISH_JOB",
       resourceId: updated.jobId,
       metadata: {
@@ -284,7 +296,12 @@ export class CatalogPublishService implements OnModuleInit {
       throw new ConflictException(`CATALOG_PUBLISH_JOB_STATUS_INVALID:${job.status}`);
     }
 
-    return this.executePublish(job, this.normalizeActor(actor), false);
+    const normalizedActor = this.normalizeActor(actor);
+    if (this.publisherMustDifferFromReviewer && this.isSameActor(normalizedActor, job.reviewedBy)) {
+      throw new ConflictException("CATALOG_PUBLISH_PUBLISHER_MUST_DIFFER_FROM_REVIEWER");
+    }
+
+    return this.executePublish(job, normalizedActor, false);
   }
 
   async retry(jobId: string, actor: string): Promise<CatalogPublishJob> {
@@ -292,17 +309,24 @@ export class CatalogPublishService implements OnModuleInit {
     if (current.status !== "FAILED") {
       throw new ConflictException(`CATALOG_PUBLISH_JOB_RETRY_INVALID_STATUS:${current.status}`);
     }
+    if (this.publisherMustDifferFromReviewer) {
+      throw new ConflictException("CATALOG_PUBLISH_RETRY_REQUIRES_SEPARATE_PUBLISH_STEP");
+    }
+    const normalizedActor = this.normalizeActor(actor);
+    if (this.reviewerMustDifferFromCreator && this.isSameActor(normalizedActor, current.createdBy)) {
+      throw new ConflictException("CATALOG_PUBLISH_REVIEWER_MUST_DIFFER_FROM_CREATOR");
+    }
 
     const reviewReady: CatalogPublishJob = {
       ...current,
       status: "IN_REVIEW",
-      reviewedBy: this.normalizeActor(actor),
+      reviewedBy: normalizedActor,
       updatedAt: new Date().toISOString(),
       failureReason: null
     };
 
     this.upsertJob(reviewReady);
-    return this.executePublish(reviewReady, this.normalizeActor(actor), true);
+    return this.executePublish(reviewReady, normalizedActor, true);
   }
 
   private async executePublish(
@@ -472,6 +496,15 @@ export class CatalogPublishService implements OnModuleInit {
   private normalizeActor(actor: string): string {
     const normalized = actor.trim();
     return normalized || "system";
+  }
+
+  private isSameActor(left: string | null | undefined, right: string | null | undefined): boolean {
+    const normalizedLeft = (left || "").trim().toLowerCase();
+    const normalizedRight = (right || "").trim().toLowerCase();
+    if (!normalizedLeft || !normalizedRight) {
+      return false;
+    }
+    return normalizedLeft === normalizedRight;
   }
 
   private normalizeOptionalText(value: string | undefined): string | null {

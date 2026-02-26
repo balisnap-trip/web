@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-21T13:13:43.096Z",
+  "note": "EP-013 UI release checklist freeze baseline",
+  "criticalFiles": [
+    {
+      "path": "src/app/(dashboard)/dashboard/page.tsx",
+      "sha256": "e303eb99ad2ac216b0bb89164f78607ca68adbc20d2fb3e450d5bbf31b3451f4"
+    },
+    {
+      "path": "src/app/(dashboard)/bookings/page.tsx",
+      "sha256": "21f93020d198e62e7567a0b195a3a42211600154b54ce6b7c66e84a102bd5be9"
+    },
+    {
+      "path": "src/app/(dashboard)/bookings/[id]/page.tsx",
+      "sha256": "64227843cf91d425ddba813f0fa4c622c319b58b25dc7817a362cca37a074243"
+    },
+    {
+      "path": "src/app/(dashboard)/email-inbox/page.tsx",
+      "sha256": "964aa092f242855f330d53acc7f25e88546c7a0e66623ed24244a9747b6f80e2"
+    },
+    {
+      "path": "src/app/(dashboard)/finance/patterns/page.tsx",
+      "sha256": "9fcf361796af69527b5e243265e1149b2f7ef5a36cb038e9f846ad399d42f0a8"
+    },
+    {
+      "path": "src/app/(dashboard)/finance/settlements/page.tsx",
+      "sha256": "647fb2b0b5ca6eef7b60ef7d3a8bcea846e53a7f83b4e89476f08105c6749494"
+    },
+    {
+      "path": "src/app/(dashboard)/finance/report/page.tsx",
+      "sha256": "269814ad96fa4873994f491f2b1d8636fd8095959938220708e00c3c4455bb59"
+    },
+    {
+      "path": "src/app/(dashboard)/finance/validate/validate-client.tsx",
+      "sha256": "a571082a55ed581123ccf487106ae7b7b55267653644fea4eb82de982505b57b"
+    },
+    {
+      "path": "src/app/(dashboard)/finance/validate/components/BookingListPanel.tsx",
+      "sha256": "7797b4b46a3c860e123eb1acadf0d6e75681d214d25bd118ecb9d51a1c73ef65"
+    },
+    {
+      "path": "src/app/(dashboard)/finance/validate/components/CommissionSplitDialog.tsx",
+      "sha256": "ec808e2c308a97918eb13e3d3e55937dfc87727d3ba9286462eae4ca872afae7"
+    },
+    {
+      "path": "src/app/(dashboard)/drivers/page.tsx",
+      "sha256": "ecdf9dfb85898adbc26d30472fc8f29236c154c4d180582ae697cc1501d1f17e"
+    },
+    {
+      "path": "src/app/(dashboard)/drivers/[id]/page.tsx",
+      "sha256": "9ddf346af41b1a60b8fb1cc379c03b9452bfbd5c0a0f1799be3d959593cdfeb0"
+    },
+    {
+      "path": "src/components/ui/status-badge.tsx",
+      "sha256": "80611c341acfd766daf63f99b696e64913e0bb6a1a51e603514162490b0dfd35"
+    },
+    {
+      "path": "src/components/ui/source-badge.tsx",
+      "sha256": "33a612af6e22d83c5b0bb1d05ad2ae85cf85430103996ce2211961a4589e7a0b"
+    },
+    {
+      "path": "src/components/ui/table.tsx",
+      "sha256": "97db819907cf1d781f8bf215a5fd2f741073617c1b6ce6483cc1d9c248752f41"
+    },
+    {
+      "path": "src/components/ui/form-field.tsx",
+      "sha256": "be74a0ae3a13ffe14e721185cf50268424dab6122650329177eb1bdbbbd01df8"
+    },
+    {
+      "path": "src/components/ui/driver-status-badge.tsx",
+      "sha256": "44c31e04275804eea698f8286f623d06e4d995e8ddaad63a4d52361f29e257ae"
+    },
+    {
+      "path": "src/lib/booking/source-label.ts",
+      "sha256": "4614ce8a617155822d9592cc915b952203739aae09bf0e2edbba0f5ce0bcde8c"
+    },
+    {
+      "path": "src/lib/driver/status-label.ts",
+      "sha256": "737f70fc654651573020f574c20fa838cc5da542cc6220736bd4b8ab47a2cf98"
+    }
+  ]
+}

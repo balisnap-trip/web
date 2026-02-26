@@ -1,7 +1,7 @@
 # Balisnaptrip Unified Plan Docs (Detailed Baseline)
 
 Tanggal baseline: 2026-02-18  
-Update terakhir: 2026-02-20  
+Update terakhir: 2026-02-21  
 Workspace: `d:\Balisnaptrip\WEB`
 
 Dokumen root `doc/` adalah baseline aktif untuk implementasi.  
@@ -76,6 +76,16 @@ Folder `doc/Plan A` dan `doc/Plan B` diperlakukan sebagai arsip referensi, bukan
 2. Path core-api production aktif: `/home/bonk/backend/core-api-prod`.
 3. Bootstrap env runtime core-api untuk key ingest/redis/admin token sudah selesai.
 4. `INGEST_SERVICE_TOKEN` dan `INGEST_SERVICE_SECRET` sudah sinkron di env emitter dan receiver.
+
+## 4.2 Update Operasional Terkini (2026-02-21)
+
+1. Publish production untuk `public web` (`balisnaptrip.com`) dan `admin ops` (`admin.balisnaptrip.com`) sudah aktif.
+2. Verifikasi domain ke runtime production valid:
+   1. domain resolve ke `192.168.0.60`,
+   2. parity hash domain vs endpoint direct runtime `5000/3100` = `MATCH`.
+3. Runtime preview staging `3101`/`3200` sudah dihentikan.
+4. Hardening cron runtime `bstadmin` production sudah diterapkan dan log periodik menunjukkan status `success`.
+5. Scope saat ini: `content manager` dilanjutkan pengembangannya oleh tim terpisah (belum masuk publish prod).
 
 ## 5. Arsip
 

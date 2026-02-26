@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { DriverStatusBadge } from '@/components/ui/driver-status-badge'
 import { ModuleTabs } from '@/components/layout/module-tabs'
 import {
   Dialog,
@@ -50,13 +51,6 @@ interface WhatsAppTemplate {
   placeholders: string[]
   xml: string
   isCustom: boolean
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  AVAILABLE: 'bg-green-100 text-green-800',
-  BUSY: 'bg-yellow-100 text-yellow-800',
-  OFF_DUTY: 'bg-gray-100 text-gray-800',
-  INACTIVE: 'bg-red-100 text-red-800',
 }
 
 export default function DriversPage() {
@@ -312,9 +306,7 @@ export default function DriversPage() {
                     </div>
                   </div>
                 </div>
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${STATUS_COLORS[driver.status]}`}>
-                  {driver.status}
-                </span>
+                <DriverStatusBadge status={driver.status} label={driver.status} />
               </div>
 
               <div className="space-y-2 text-sm">

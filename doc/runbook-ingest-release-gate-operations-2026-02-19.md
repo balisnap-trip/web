@@ -1,7 +1,7 @@
 # Ingest Release Gate Operations Runbook
 
 Tanggal: 2026-02-19  
-Update terakhir: 2026-02-20  
+Update terakhir: 2026-02-21  
 Scope: operasi gate ingestion (`F-00` s.d. `F-05`) + quality evidence phase-2.
 
 ## 1. Tujuan
@@ -61,6 +61,24 @@ Catatan model DB:
 4. Catatan validasi lokal:
    1. runtime lokal menggunakan `INGEST_SYNC_FALLBACK_ENABLED=true` dengan queue nonaktif untuk memastikan replay drill tetap dapat divalidasi saat Redis lokal tidak tersedia.
 
+## 2.3 Snapshot Operasional Prod (2026-02-21)
+
+1. Publish production `public web` dan `admin ops` sudah aktif:
+   1. `https://balisnaptrip.com` (`200`),
+   2. `https://admin.balisnaptrip.com/login` (`200`).
+2. Verifikasi domain ke runtime production:
+   1. `balisnaptrip.com` dan `admin.balisnaptrip.com` resolve ke `192.168.0.60`,
+   2. parity hash konten domain vs direct runtime `5000/3100` = `MATCH`.
+3. Runtime preview staging non-prod (`3101`/`3200`) sudah dihentikan.
+4. Hardening runtime `bstadmin` production sudah diterapkan:
+   1. `HOSTNAME=0.0.0.0`,
+   2. `INTERNAL_CRON_BASE_URL=http://127.0.0.1:3100`,
+   3. `CRON_INITIAL_DELAY_MS=30000`,
+   4. log periodik menunjukkan `[Cron Runner] ... success`.
+5. Scope produksi saat ini:
+   1. `public web` + `admin ops` = release aktif,
+   2. `content manager` = lanjut pengembangan tim terpisah (belum masuk publish prod).
+
 ## 3. Jalur Eksekusi Lokal
 
 1. Preflight runtime env baseline (`F-00`):
@@ -102,6 +120,13 @@ Catatan model DB:
       1. `RUN_EVIDENCE_INGEST_RETENTION_GATE=true pnpm --filter @bst/core-api release:evidence`
    9. jika batch masih pre-catalog bridge dan denominator katalog belum tersedia, quality bisa dijalankan dengan:
       1. `QUALITY_ALLOW_EMPTY_CATALOG_DENOMINATOR=true pnpm --filter @bst/core-api quality:phase2`
+11. Release candidate UI gates (gabungan EP-013 + EP-010, opsional T-009-05):
+   1. strict internal+CM:
+      1. `pnpm gate:release-candidate-ui`
+   2. include public web continuity:
+      1. `RC_UI_GATES_RUN_PUBLIC_WEB_CONTINUITY=true PUBLIC_WEB_BASE_URL=http://192.168.0.60:5000 pnpm gate:release-candidate-ui`
+   3. contoh parsial (hanya EP-013):
+      1. `RC_UI_GATES_RUN_CATALOG_EDITOR_SMOKE=false RC_UI_GATES_RUN_CATALOG_PUBLISH_GATE=false pnpm gate:release-candidate-ui`
 
 ## 3.1 Preflight Wajib Sebelum Gate
 
@@ -140,6 +165,8 @@ Catatan model DB:
    1. `.github/workflows/payment-finance-bridge-backfill.yml`
 10. Payment-finance bridge gate (Batch E):
    1. `.github/workflows/payment-finance-bridge-gate.yml`
+11. Release candidate UI gates (EP-013 + EP-010 + optional continuity):
+   1. `.github/workflows/release-candidate-ui-gates.yml`
 
 ## 5. Lokasi Evidence
 
@@ -156,6 +183,11 @@ Catatan model DB:
 11. `reports/gates/booking-bridge/*`
 12. `reports/recon/{batch}/*-payment-finance-bridge-backfill.*`
 13. `reports/gates/payment-finance/*`
+14. `reports/gates/release-candidate-ui/*`
+15. `reports/gates/ui-release-checklist/*`
+16. `reports/smoke/catalog-editor/*`
+17. `reports/gates/catalog-publish-workflow/*`
+18. `reports/gates/public-web-continuity/*` (jika continuity diaktifkan)
 
 ## 6. Checklist Go/No-Go Singkat
 

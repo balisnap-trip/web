@@ -9,6 +9,11 @@ import 'react-toastify/dist/ReactToastify.css'
 import { title } from '@/components/primitives'
 import { toastr } from '@/lib/utils/toast/toast'
 
+const HeroInput = Input as unknown as React.ComponentType<any>
+const HeroTextarea = Textarea as unknown as React.ComponentType<any>
+const HeroButton = Button as unknown as React.ComponentType<any>
+const HeroSpinner = Spinner as unknown as React.ComponentType<any>
+
 export default function ContactPage() {
   const [formData, setFormData] = useState({
     name: '',
@@ -130,7 +135,7 @@ export default function ContactPage() {
       <div className="my-8 text-sm font-bold leading-relaxed text-gray-600">
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <Input
+            <HeroInput
               required
               color={errors.name ? 'danger' : 'default'}
               label="Name"
@@ -146,7 +151,7 @@ export default function ContactPage() {
             )}
           </div>
           <div className="mb-4">
-            <Input
+            <HeroInput
               required
               color={errors.email ? 'danger' : 'default'}
               label="Email"
@@ -162,7 +167,7 @@ export default function ContactPage() {
             )}
           </div>
           <div className="mb-4">
-            <Textarea
+            <HeroTextarea
               required
               color={errors.message ? 'danger' : 'default'}
               label="Message"
@@ -177,16 +182,16 @@ export default function ContactPage() {
             )}
           </div>
           <div className="flex justify-center">
-            <Button
+            <HeroButton
               color="success"
               isDisabled={isButtonDisabled()}
               radius="md"
               size="lg"
               type="submit"
             >
-              {loading ? <Spinner color="white" size="sm" /> : null}
+              {loading ? <HeroSpinner color="white" size="sm" /> : null}
               Send
-            </Button>
+            </HeroButton>
           </div>
         </form>
       </div>

@@ -1,10 +1,10 @@
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
+import { FormField } from '@/components/ui/form-field'
 import { Select } from '@/components/ui/select'
+import { StatusBadge } from '@/components/ui/status-badge'
 import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/date-format'
-import { getBookingStatusMeta } from '@/lib/booking/status-label'
 import type { BookingListItem } from '@/lib/finance/types'
 
 type StatusOption = { value: string; label: string }
@@ -36,18 +36,18 @@ export function BookingListPanel({
         <div className="text-xs text-slate-400">{bookings.length} booking(s)</div>
       </div>
       <div className="mt-3">
-        <Label className="text-xs text-slate-500">Status</Label>
-        <Select
-          className="mt-1"
-          value={statusFilter}
-          onChange={(e) => onStatusChange(e.target.value)}
-        >
-          {statusOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </Select>
+        <FormField label="Status" className="space-y-0.5" labelClassName="text-xs text-slate-500">
+          <Select
+            value={statusFilter}
+            onChange={(e) => onStatusChange(e.target.value)}
+          >
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
       </div>
 
       {bookings.length === 0 ? (
@@ -59,7 +59,6 @@ export function BookingListPanel({
           {bookings.map((booking) => {
             const paxLabel = `${booking.numberOfAdult}A${booking.numberOfChild ? ` ${booking.numberOfChild}C` : ''}`
             const isActive = selectedBookingId === booking.id
-            const statusMeta = getBookingStatusMeta(booking.status)
             return (
               <Button
                 key={booking.id}
@@ -87,9 +86,7 @@ export function BookingListPanel({
                         Guest: {booking.mainContactName || 'Not set'}
                       </div>
                     </div>
-                    <div className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold border ${statusMeta.className}`}>
-                      {statusMeta.label}
-                    </div>
+                    <StatusBadge status={booking.status} className="flex-shrink-0" />
                   </div>
 
                   <div className="space-y-2 pt-2 border-t border-slate-100">

@@ -1,7 +1,7 @@
 # UI/UX Standardization Spec (Admin + Content Manager, Public Web Continuity)
 
 Tanggal baseline: 2026-02-18  
-Update implementasi: 2026-02-20  
+Update implementasi: 2026-02-21  
 Status: aktif (turunan langsung dari `ADR-011`)
 
 ## 1. Scope dan Tujuan
@@ -259,7 +259,22 @@ Output:
 10. Setiap rilis, diff harus direview.
 11. Regressi mayor menahan rilis sampai resolved atau disetujui eksplisit.
 
-## 12. Definition of Done (UI/UX)
+Automasi internal (`bstadmin`) untuk freeze checklist visual:
+1. Command gate: `pnpm --filter bst-admin gate:ui-release-checklist`
+2. Baseline hash: `bstadmin/config/ui-release-checklist-baseline.json`
+3. Workflow manual: `.github/workflows/ui-release-checklist-gate.yml`
+4. Runner release candidate gabungan: `pnpm gate:release-candidate-ui` (workflow `.github/workflows/release-candidate-ui-gates.yml`)
+
+## 12. Snapshot Status Implementasi (2026-02-21)
+
+1. `EP-013` standardisasi komponen prioritas admin + CM sudah `DONE` dan tervalidasi gate release candidate UI.
+2. `public web continuity` (`T-009-05`) sudah `PASS` dan `public web` telah aktif di production.
+3. `admin ops` telah publish production dan runtime cron stabil (`[Cron Runner] ... success`).
+4. `content manager` saat ini diposisikan sebagai scope lanjutan:
+   1. baseline UI standard sudah tersedia,
+   2. penyempurnaan fitur dilanjutkan tim pengembangan terpisah.
+
+## 13. Definition of Done (UI/UX)
 
 Sebuah item UI dianggap selesai jika:
 1. sesuai standar komponen/token dokumen ini,
@@ -268,7 +283,7 @@ Sebuah item UI dianggap selesai jika:
 4. tidak menurunkan UX flow public (untuk perubahan di `balisnap`),
 5. terdokumentasi di changelog/release note internal.
 
-## 13. Keterkaitan Dengan Dokumen Lain
+## 14. Keterkaitan Dengan Dokumen Lain
 
 1. Mengikat dari `doc/prep-decision-lock-2026-02-18.md` (`ADR-011`).
 2. Eksekusi fase ada di `doc/cross-project-master-plan-2026-02-18.md`.

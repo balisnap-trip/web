@@ -2,6 +2,9 @@ import { apiSuccess, handleApiError } from '@/lib/api/http'
 import { prisma } from '@/lib/db'
 import { toLegacyTourCard } from '@/lib/utils/tour/v2Mapper'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   try {
     const products = await prisma.tourProduct.findMany({

@@ -3,6 +3,38 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 
+function parseEnabledValue(value: unknown): boolean | null {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  if (typeof value === 'number') {
+    return value !== 0
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (!normalized) return null
+    if (['1', 'true', 'yes', 'on', 'enabled'].includes(normalized)) return true
+    if (['0', 'false', 'no', 'off', 'disabled'].includes(normalized)) return false
+    return null
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value) && 'enabled' in value) {
+    const maybeEnabled = value as { enabled?: unknown }
+    return parseEnabledValue(maybeEnabled.enabled)
+  }
+
+  return null
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
 /**
  * GET /api/settings/feature-flags
  * Returns feature toggles (whatsapp, cron)
@@ -23,31 +55,23 @@ export async function GET() {
       prisma.systemSetting.findUnique({ where: { key: 'cron_status' } }),
     ])
 
-    const whatsappEnabled =
-      typeof waSetting?.value === 'object' && waSetting?.value && 'enabled' in waSetting.value
-        ? Boolean((waSetting.value as any).enabled)
-        : process.env.WHATSAPP_ENABLED !== 'false'
+    const envWaEnabled = parseEnabledValue(process.env.WHATSAPP_ENABLED)
+    const whatsappEnabled = parseEnabledValue(waSetting?.value) ?? envWaEnabled ?? true
 
-    const cronEnabled =
-      typeof cronSetting?.value === 'object' && cronSetting?.value && 'enabled' in cronSetting.value
-        ? Boolean((cronSetting.value as any).enabled)
-        : true
+    const cronEnabled = parseEnabledValue(cronSetting?.value) ?? true
+    const cronConfigValue = asRecord(cronConfig?.value)
+    const cronLastRunValue = asRecord(cronLastRun?.value)
+    const cronStatusValue = asRecord(cronStatus?.value) ?? undefined
 
     const cronInterval =
-      typeof cronConfig?.value === 'object' && cronConfig?.value && 'interval' in cronConfig.value
-        ? String((cronConfig.value as any).interval)
-        : 'hourly'
+      typeof cronConfigValue?.interval === 'string' ? cronConfigValue.interval : 'hourly'
     const cronCustomMinutes =
-      typeof cronConfig?.value === 'object' && cronConfig?.value && 'customMinutes' in cronConfig.value
-        ? Number((cronConfig.value as any).customMinutes)
+      cronConfigValue && (typeof cronConfigValue.customMinutes === 'number' || typeof cronConfigValue.customMinutes === 'string')
+        ? Number(cronConfigValue.customMinutes)
         : 60
     const cronLastRunAt =
-      typeof cronLastRun?.value === 'object' && cronLastRun?.value && 'at' in cronLastRun.value
-        ? String((cronLastRun.value as any).at)
-        : undefined
-    const cronStatusValue =
-      typeof cronStatus?.value === 'object' && cronStatus?.value
-        ? cronStatus.value as any
+      typeof cronLastRunValue?.at === 'string'
+        ? cronLastRunValue.at
         : undefined
 
     return NextResponse.json({
@@ -81,8 +105,8 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json()
-    const whatsappEnabled = Boolean(body?.whatsappEnabled)
-    const cronEnabled = Boolean(body?.cronEnabled)
+    const whatsappEnabled = parseEnabledValue(body?.whatsappEnabled) ?? false
+    const cronEnabled = parseEnabledValue(body?.cronEnabled) ?? false
     const cronInterval = String(body?.cronInterval || 'hourly')
     const cronCustomMinutes = Number(body?.cronCustomMinutes || 60)
 
