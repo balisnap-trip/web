@@ -672,7 +672,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
     : false
   const hasGuestPhone = Boolean(booking?.phoneNumber?.trim())
   const hasDriverPhone = Boolean(booking?.driver?.phone?.trim())
-  const isReadyStatus = booking?.status === 'READY'
+  const hasReadySetup = Boolean(booking?.assignedDriverId && finance?.patternId)
   const isAttentionStatus = booking?.status === 'ATTENTION'
   const isDoneStatus = booking?.status === 'DONE'
 
@@ -705,29 +705,33 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
       ],
     },
     {
-      title: '2. Status READY',
+      title: '2. Notifikasi Penugasan',
       actions: [
         {
           type: 'READY_DRIVER',
           label: 'Penugasan ke driver',
           hint: 'Kirim detail booking + tugas ke driver.',
-          disabled: !isReadyStatus || !hasDriverPhone,
-          reason: !isReadyStatus ? 'Hanya aktif saat status READY.' : !hasDriverPhone ? 'Nomor WA driver belum tersedia.' : undefined,
+          disabled: !hasReadySetup || !hasDriverPhone,
+          reason: !hasReadySetup
+            ? 'Aktif jika driver dan product template sudah di-assign.'
+            : !hasDriverPhone
+              ? 'Nomor WA driver belum tersedia.'
+              : undefined,
         },
         {
           type: 'READY_PARTNERS',
           label: 'Detail booking ke partner',
           hint: 'Kirim detail booking ke partner terkait.',
-          disabled: !isReadyStatus,
-          reason: !isReadyStatus ? 'Hanya aktif saat status READY.' : undefined,
+          disabled: !hasReadySetup,
+          reason: !hasReadySetup ? 'Aktif jika driver dan product template sudah di-assign.' : undefined,
         },
         {
           type: 'READY_GUEST',
           label: 'Detail driver ke tamu',
           hint: 'Kirim info driver yang bertugas ke tamu.',
-          disabled: !isReadyStatus || !hasGuestPhone || !booking?.driver,
-          reason: !isReadyStatus
-            ? 'Hanya aktif saat status READY.'
+          disabled: !hasReadySetup || !hasGuestPhone || !booking?.driver,
+          reason: !hasReadySetup
+            ? 'Aktif jika driver dan product template sudah di-assign.'
             : !booking?.driver
               ? 'Driver belum ditugaskan.'
               : !hasGuestPhone

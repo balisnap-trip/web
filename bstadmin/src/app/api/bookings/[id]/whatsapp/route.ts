@@ -286,9 +286,14 @@ export async function POST(
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     }
 
-    if (READY_ONLY_TYPES.includes(sendType) && booking.status !== 'READY') {
+    const canSendReadyNotifications = Boolean(booking.assignedDriverId && booking.finance?.patternId)
+
+    if (READY_ONLY_TYPES.includes(sendType) && !canSendReadyNotifications) {
       return NextResponse.json(
-        { error: 'Notifikasi ini hanya bisa dikirim saat status booking READY.' },
+        {
+          error:
+            'Notifikasi READY hanya bisa dikirim jika driver dan product template sudah di-assign.',
+        },
         { status: 400 }
       )
     }
