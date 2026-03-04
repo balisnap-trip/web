@@ -51,6 +51,8 @@ export interface CatalogEditorRate {
   travelerType: CatalogTravelerType;
   currencyCode: string;
   price: number;
+  minQuantity: number | null;
+  maxQuantity: number | null;
   isActive: boolean;
 }
 
@@ -120,6 +122,8 @@ export interface CatalogEditorRateCreateInput {
   travelerType: string;
   currencyCode?: string;
   price: number;
+  minQuantity?: number | null;
+  maxQuantity?: number | null;
   isActive?: boolean;
 }
 
@@ -127,6 +131,8 @@ export interface CatalogEditorRatePatchInput {
   travelerType?: string;
   currencyCode?: string;
   price?: number;
+  minQuantity?: number | null;
+  maxQuantity?: number | null;
   isActive?: boolean;
 }
 
@@ -161,6 +167,8 @@ interface RateRow {
   traveler_type: string;
   currency_code: string;
   price: number | string;
+  min_quantity: number | string | null;
+  max_quantity: number | string | null;
   is_active: boolean;
 }
 
@@ -340,10 +348,17 @@ export class CatalogEditorService {
           r.traveler_type,
           r.currency_code,
           r.price,
+          r.min_quantity,
+          r.max_quantity,
           r.is_active
         from catalog_variant_rate r
         where ${rateFilters.join(" and ")}
-        order by r.variant_key asc, r.traveler_type asc, r.price asc
+        order by
+          r.variant_key asc,
+          r.traveler_type asc,
+          coalesce(r.min_quantity, 1) asc,
+          coalesce(r.max_quantity, 2147483647) asc,
+          r.price asc
       `,
       [[...variantById.keys()]]
     );
@@ -358,6 +373,8 @@ export class CatalogEditorService {
         travelerType: this.normalizeTravelerType(row.traveler_type),
         currencyCode: this.normalizeCurrencyCode(row.currency_code),
         price: Number(row.price) || 0,
+        minQuantity: this.parseQuantityFromRow(row.min_quantity),
+        maxQuantity: this.parseQuantityFromRow(row.max_quantity),
         isActive: Boolean(row.is_active)
       });
     }
@@ -929,7 +946,9 @@ export class CatalogEditorService {
       resourceId: variantId,
       metadata: {
         travelerType: normalizedRate.travelerType,
-        price: normalizedRate.price
+        price: normalizedRate.price,
+        minQuantity: normalizedRate.minQuantity,
+        maxQuantity: normalizedRate.maxQuantity
       }
     });
 
@@ -954,6 +973,35 @@ export class CatalogEditorService {
     if (input.price !== undefined) {
       values.push(this.parseDecimal(input.price, "CATALOG_RATE_PRICE_INVALID"));
       setClauses.push(`price = $${values.length}`);
+    }
+
+    const nextMinQuantity =
+      input.minQuantity !== undefined
+        ? this.parseQuantityInput(input.minQuantity, "CATALOG_RATE_MIN_QUANTITY_INVALID")
+        : undefined;
+    const nextMaxQuantity =
+      input.maxQuantity !== undefined
+        ? this.parseQuantityInput(input.maxQuantity, "CATALOG_RATE_MAX_QUANTITY_INVALID")
+        : undefined;
+
+    if (
+      nextMinQuantity !== undefined &&
+      nextMaxQuantity !== undefined &&
+      nextMinQuantity !== null &&
+      nextMaxQuantity !== null &&
+      nextMaxQuantity < nextMinQuantity
+    ) {
+      throw new BadRequestException("CATALOG_RATE_QUANTITY_RANGE_INVALID");
+    }
+
+    if (nextMinQuantity !== undefined) {
+      values.push(nextMinQuantity);
+      setClauses.push(`min_quantity = $${values.length}`);
+    }
+
+    if (nextMaxQuantity !== undefined) {
+      values.push(nextMaxQuantity);
+      setClauses.push(`max_quantity = $${values.length}`);
     }
 
     if (input.isActive !== undefined) {
@@ -1020,7 +1068,9 @@ export class CatalogEditorService {
       resourceId: rateId,
       metadata: {
         variantId,
-        fields: setClauses.length
+        fields: setClauses.length,
+        minQuantity: nextMinQuantity,
+        maxQuantity: nextMaxQuantity
       }
     });
 
@@ -1438,6 +1488,8 @@ export class CatalogEditorService {
       travelerType: CatalogTravelerType;
       currencyCode: string;
       price: number;
+      minQuantity: number | null;
+      maxQuantity: number | null;
       isActive: boolean;
     }>;
   } {
@@ -1456,12 +1508,23 @@ export class CatalogEditorService {
     travelerType: CatalogTravelerType;
     currencyCode: string;
     price: number;
+    minQuantity: number | null;
+    maxQuantity: number | null;
     isActive: boolean;
   } {
+    const minQuantity = this.parseQuantityInput(input.minQuantity, "CATALOG_RATE_MIN_QUANTITY_INVALID");
+    const maxQuantity = this.parseQuantityInput(input.maxQuantity, "CATALOG_RATE_MAX_QUANTITY_INVALID");
+
+    if (minQuantity !== null && maxQuantity !== null && maxQuantity < minQuantity) {
+      throw new BadRequestException("CATALOG_RATE_QUANTITY_RANGE_INVALID");
+    }
+
     return {
       travelerType: this.normalizeTravelerType(input.travelerType),
       currencyCode: this.normalizeCurrencyCode(input.currencyCode),
       price: this.parseDecimal(input.price, "CATALOG_RATE_PRICE_INVALID"),
+      minQuantity,
+      maxQuantity,
       isActive: input.isActive ?? true
     };
   }
@@ -1515,6 +1578,8 @@ export class CatalogEditorService {
         travelerType: CatalogTravelerType;
         currencyCode: string;
         price: number;
+        minQuantity: number | null;
+        maxQuantity: number | null;
         isActive: boolean;
       }>;
     }
@@ -1580,6 +1645,8 @@ export class CatalogEditorService {
       travelerType: CatalogTravelerType;
       currencyCode: string;
       price: number;
+      minQuantity: number | null;
+      maxQuantity: number | null;
       isActive: boolean;
     }
   ) {
@@ -1591,12 +1658,23 @@ export class CatalogEditorService {
           traveler_type,
           currency_code,
           price,
+          min_quantity,
+          max_quantity,
           is_active
         ) values (
-          $1,$2,$3,$4,$5,$6
+          $1,$2,$3,$4,$5,$6,$7,$8
         )
       `,
-      [randomUUID(), variantId, rate.travelerType, rate.currencyCode, rate.price, rate.isActive]
+      [
+        randomUUID(),
+        variantId,
+        rate.travelerType,
+        rate.currencyCode,
+        rate.price,
+        rate.minQuantity,
+        rate.maxQuantity,
+        rate.isActive
+      ]
     );
   }
 
@@ -1680,6 +1758,39 @@ export class CatalogEditorService {
     }
 
     return normalized;
+  }
+
+  private parseQuantityInput(
+    value: number | null | undefined,
+    errorCode: string
+  ): number | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      throw new BadRequestException(errorCode);
+    }
+
+    const normalized = Math.trunc(parsed);
+    if (normalized < 1) {
+      throw new BadRequestException(errorCode);
+    }
+
+    return normalized;
+  }
+
+  private parseQuantityFromRow(value: number | string | null): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return null;
+    }
+    const normalized = Math.trunc(parsed);
+    return normalized >= 1 ? normalized : null;
   }
 
   private parseDecimal(value: number, errorCode: string): number {

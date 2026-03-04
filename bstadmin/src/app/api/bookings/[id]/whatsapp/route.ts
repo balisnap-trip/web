@@ -9,6 +9,12 @@ import {
   renderWhatsAppTemplateXml,
   type WhatsAppTemplateKey,
 } from '@/lib/whatsapp/templates'
+import { loadPatternItemOffsetMap, normalizeOffsetMinutes } from '@/lib/whatsapp/partner-offsets'
+import {
+  getPartnerTemplateXml,
+  loadPartnerTemplateMap,
+  type PartnerTemplateMap,
+} from '@/lib/whatsapp/partner-templates'
 
 const WA_SEND_TYPES = [
   'BOOKING_GROUP',
@@ -33,6 +39,7 @@ type MessageDraft = {
   message: string
   canSend: boolean
   error: string | null
+  offsetMinutes: number | null
 }
 
 type SendResult = {
@@ -46,6 +53,8 @@ type SendResult = {
 const READY_ONLY_TYPES: WaSendType[] = ['READY_DRIVER', 'READY_PARTNERS', 'READY_GUEST']
 const ATTENTION_ONLY_TYPES: WaSendType[] = ['ATTENTION_GUEST', 'ATTENTION_DRIVER']
 const DONE_ONLY_TYPES: WaSendType[] = ['DONE_PAID_INVOICE']
+const BALI_TIME_ZONE = 'Asia/Makassar'
+const MINUTES_PER_DAY = 24 * 60
 
 function isWaSendType(value: unknown): value is WaSendType {
   return typeof value === 'string' && WA_SEND_TYPES.includes(value as WaSendType)
@@ -81,13 +90,149 @@ function normalizeTourTimeToAmPm(tourTime?: string | null): string | null {
   return `${hour12}:${minute} ${suffix}`
 }
 
+function parseTourTimeToMinutes(tourTime?: string | null): number | null {
+  const raw = String(tourTime ?? '').trim()
+  if (!raw) return null
+
+  const ampmMatch = raw.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i)
+  if (ampmMatch) {
+    const hourRaw = Number(ampmMatch[1])
+    const minute = Number(ampmMatch[2])
+    if (hourRaw < 1 || hourRaw > 12 || minute < 0 || minute > 59) return null
+    const suffix = ampmMatch[3].toUpperCase()
+    const hour24 =
+      suffix === 'AM'
+        ? hourRaw % 12
+        : hourRaw % 12 + 12
+    return hour24 * 60 + minute
+  }
+
+  const hmMatch = raw.match(/^(\d{1,2}):(\d{2})$/)
+  if (!hmMatch) return null
+  const hour24 = Number(hmMatch[1])
+  const minute = Number(hmMatch[2])
+  if (hour24 < 0 || hour24 > 23 || minute < 0 || minute > 59) return null
+  return hour24 * 60 + minute
+}
+
+function toAmPmLabel(totalMinutes: number): string {
+  const hour24 = Math.floor(totalMinutes / 60)
+  const minute = totalMinutes % 60
+  const suffix = hour24 >= 12 ? 'PM' : 'AM'
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12
+  return `${hour12}:${String(minute).padStart(2, '0')} ${suffix}`
+}
+
+function getBaliDateParts(date: Date): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: BALI_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date)
+  const year = Number(parts.find((p) => p.type === 'year')?.value)
+  const month = Number(parts.find((p) => p.type === 'month')?.value)
+  const day = Number(parts.find((p) => p.type === 'day')?.value)
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return {
+      year: date.getUTCFullYear(),
+      month: date.getUTCMonth() + 1,
+      day: date.getUTCDate(),
+    }
+  }
+  return { year, month, day }
+}
+
+function shiftBaliDate(date: Date, dayOffset: number): Date {
+  const { year, month, day } = getBaliDateParts(date)
+  const shifted = new Date(Date.UTC(year, month - 1, day, 0, 0, 0))
+  shifted.setUTCDate(shifted.getUTCDate() + dayOffset)
+  return shifted
+}
+
+function parsePartnerDraftId(value: string): number | null {
+  const match = value.match(/^PARTNER:(\d+)$/)
+  if (!match) return null
+  const partnerId = Number(match[1])
+  if (!Number.isFinite(partnerId) || partnerId <= 0) return null
+  return partnerId
+}
+
+async function resolvePatternPartnerOffsetMap(
+  patternId: number | null | undefined
+): Promise<Map<number, number>> {
+  if (!patternId || !Number.isFinite(patternId)) {
+    return new Map<number, number>()
+  }
+
+  const [itemOffsetMap, patternItems] = await Promise.all([
+    loadPatternItemOffsetMap(),
+    prisma.tourCostPatternItem.findMany({
+      where: { patternId },
+      select: {
+        id: true,
+        defaultPartnerId: true,
+        serviceItem: {
+          select: {
+            defaultPartnerId: true,
+          },
+        },
+      },
+      orderBy: [{ position: 'asc' }, { id: 'asc' }],
+    }),
+  ])
+
+  const partnerOffsetMap = new Map<number, number>()
+  for (const item of patternItems) {
+    const partnerId = item.defaultPartnerId ?? item.serviceItem.defaultPartnerId ?? null
+    if (!partnerId) continue
+
+    const offsetMinutes = itemOffsetMap[String(item.id)] ?? 0
+    const existing = partnerOffsetMap.get(partnerId)
+    if (existing === undefined || (existing === 0 && offsetMinutes !== 0)) {
+      partnerOffsetMap.set(partnerId, offsetMinutes)
+    }
+  }
+
+  return partnerOffsetMap
+}
+
+function formatTourDateForPartner(
+  date: Date,
+  tourTime: string | null | undefined,
+  offsetMinutes?: number | null
+): string {
+  const normalizedOffset = normalizeOffsetMinutes(offsetMinutes)
+  if (normalizedOffset === null || normalizedOffset === 0) {
+    return formatTourDate(date, tourTime)
+  }
+
+  const baseMinutes = parseTourTimeToMinutes(tourTime)
+  if (baseMinutes === null) {
+    return formatTourDate(date, tourTime)
+  }
+
+  const shiftedTotal = baseMinutes + normalizedOffset
+  const dayOffset = Math.floor(shiftedTotal / MINUTES_PER_DAY)
+  const minutesInDay = ((shiftedTotal % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY
+  const dateLabel = new Intl.DateTimeFormat('id-ID', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    timeZone: BALI_TIME_ZONE,
+  }).format(shiftBaliDate(date, dayOffset))
+
+  return `${dateLabel} ${toAmPmLabel(minutesInDay)} WITA`
+}
+
 function formatTourDate(date: Date, tourTime?: string | null): string {
   const dateLabel = new Intl.DateTimeFormat('id-ID', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
     year: 'numeric',
-    timeZone: 'Asia/Makassar',
+    timeZone: BALI_TIME_ZONE,
   }).format(date)
 
   const normalized = normalizeTourTimeToAmPm(tourTime)
@@ -99,7 +244,7 @@ function formatTourDate(date: Date, tourTime?: string | null): string {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
-    timeZone: 'Asia/Makassar',
+    timeZone: BALI_TIME_ZONE,
   }).format(date)
 
   return `${dateLabel} ${timeLabel} WITA`
@@ -121,7 +266,7 @@ function formatPax(adult: number, child?: number | null): string {
 
 function monthKeyInBali(date: Date): string {
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Asia/Makassar',
+    timeZone: BALI_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
   }).formatToParts(date)
@@ -199,12 +344,40 @@ function renderFromTemplate(
   return ''
 }
 
+function renderFromPartnerTemplate(
+  partnerId: number,
+  partnerTemplateMap: PartnerTemplateMap,
+  fallbackKey: WhatsAppTemplateKey,
+  globalTemplates: Map<WhatsAppTemplateKey, string>,
+  variables: Record<string, string | null | undefined>
+): string {
+  const customXml = getPartnerTemplateXml(partnerTemplateMap, partnerId)
+  if (customXml) {
+    const rendered = renderWhatsAppTemplateXml(customXml, variables)
+    if (!rendered.error) {
+      return rendered.message
+    }
+    console.warn(
+      `[WA Template] Invalid partner template for partnerId=${partnerId}, key=${fallbackKey}. Using fallback template.`
+    )
+  }
+  return renderFromTemplate(fallbackKey, globalTemplates, variables)
+}
+
+function resolvePartnerPaymentMethod(packageName?: string | null): string {
+  const normalized = String(packageName ?? '').trim().toLowerCase()
+  if (normalized.includes('include')) return 'bank transfer'
+  if (normalized.includes('exclude')) return 'cash by guest'
+  return '-'
+}
+
 function buildPhoneDraft(
   whatsapp: ReturnType<typeof getWhatsAppService>,
   id: string,
   target: string,
   phone: string | null | undefined,
-  message: string
+  message: string,
+  offsetMinutes: number | null = null
 ): MessageDraft {
   const normalized = whatsapp.normalizePhoneNumber(phone)
   if (!normalized) {
@@ -217,6 +390,7 @@ function buildPhoneDraft(
       message,
       canSend: false,
       error: 'Nomor WhatsApp kosong / tidak valid',
+      offsetMinutes,
     }
   }
 
@@ -229,6 +403,7 @@ function buildPhoneDraft(
     message,
     canSend: true,
     error: null,
+    offsetMinutes,
   }
 }
 
@@ -258,6 +433,38 @@ export async function POST(
     }
     const sendType = body.type
     const mode: WaMode = isWaMode(body?.mode) ? body.mode : 'send'
+    const requestedDraftIds = new Set<string>()
+    const editMap = new Map<string, string>()
+    const partnerOffsetOverrideMap = new Map<number, number>()
+    if (Array.isArray(body?.drafts)) {
+      for (const rawItem of body.drafts) {
+        const item =
+          rawItem && typeof rawItem === 'object'
+            ? (rawItem as Record<string, unknown>)
+            : null
+        if (!item) continue
+
+        const id = typeof item.id === 'string' ? item.id : null
+        if (!id) continue
+        requestedDraftIds.add(id)
+
+        const message = typeof item.message === 'string' ? item.message : null
+        if (message !== null) {
+          editMap.set(id, message)
+        }
+
+        const partnerId = parsePartnerDraftId(id)
+        if (
+          partnerId !== null &&
+          Object.prototype.hasOwnProperty.call(item, 'offsetMinutes')
+        ) {
+          const normalizedOffset = normalizeOffsetMinutes(item.offsetMinutes)
+          if (normalizedOffset !== null) {
+            partnerOffsetOverrideMap.set(partnerId, normalizedOffset)
+          }
+        }
+      }
+    }
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
@@ -331,7 +538,15 @@ export async function POST(
       templateKeys.push('whatsapp_template_done_driver_invoice_xml')
     }
     const templateXmlMap = await loadTemplateXmlMap(templateKeys)
-    const drafts: MessageDraft[] = []
+    const [readyPartnerTemplateMap, doneInvoicePartnerTemplateMap] = await Promise.all([
+      sendType === 'READY_PARTNERS'
+        ? loadPartnerTemplateMap('ready')
+        : Promise.resolve({} as PartnerTemplateMap),
+      sendType === 'DONE_PAID_INVOICE'
+        ? loadPartnerTemplateMap('done_invoice')
+        : Promise.resolve({} as PartnerTemplateMap),
+    ])
+    let drafts: MessageDraft[] = []
     const pushGroupDraft = (id: string, target: string, message: string) => {
       drafts.push({
         id,
@@ -342,15 +557,17 @@ export async function POST(
         message,
         canSend: true,
         error: null,
+        offsetMinutes: null,
       })
     }
     const pushPhoneDraft = (
       id: string,
       target: string,
       phone: string | null | undefined,
-      message: string
+      message: string,
+      offsetMinutes: number | null = null
     ) => {
-      drafts.push(buildPhoneDraft(whatsapp, id, target, phone, message))
+      drafts.push(buildPhoneDraft(whatsapp, id, target, phone, message, offsetMinutes))
     }
 
     if (sendType === 'BOOKING_GROUP') {
@@ -435,24 +652,44 @@ export async function POST(
         return NextResponse.json({ error: 'Partner belum tersedia pada finance items booking ini.' }, { status: 400 })
       }
 
+      const patternPartnerOffsetMap = await resolvePatternPartnerOffsetMap(booking.finance?.patternId)
+      const partnerPaymentMethod = resolvePartnerPaymentMethod(booking.package?.packageName)
+
       await Promise.all(
         [...partnerMap.values()].map(async (partner) => {
-          const msg = renderFromTemplate('whatsapp_template_ready_partner_xml', templateXmlMap, {
+          const defaultOffsetMinutes = patternPartnerOffsetMap.get(partner.id) ?? 0
+          const overrideOffsetMinutes = partnerOffsetOverrideMap.get(partner.id)
+          const partnerOffsetMinutes =
+            overrideOffsetMinutes !== undefined ? overrideOffsetMinutes : defaultOffsetMinutes
+          const partnerTourDateLabel = formatTourDateForPartner(
+            booking.tourDate,
+            booking.tourTime,
+            partnerOffsetMinutes
+          )
+          const templateVars = {
             partner_name: partner.name || '-',
             booking_ref: bookingRef,
             package_name: tourName,
-            tour_date_time: tourDateLabel,
+            tour_date_time: partnerTourDateLabel,
             guest_name: guestName,
             guest_phone: booking.phoneNumber || '-',
             pax: paxLabel,
             driver_name: booking.driver?.name || '-',
             driver_phone: booking.driver?.phone || '-',
+            payment_method: partnerPaymentMethod,
             meeting_point: meetingPointLine || '-',
             tour_line: noteTourLine || '',
             package_line: notePackageLine || '',
-          })
+          }
+          const partnerMsg = renderFromPartnerTemplate(
+            partner.id,
+            readyPartnerTemplateMap,
+            'whatsapp_template_ready_partner_xml',
+            templateXmlMap,
+            templateVars
+          )
 
-          if (!msg.trim()) {
+          if (!partnerMsg.trim()) {
             return
           }
 
@@ -460,7 +697,8 @@ export async function POST(
             `PARTNER:${partner.id}`,
             `PARTNER:${partner.name}`,
             partner.picWhatsapp,
-            msg
+            partnerMsg,
+            partnerOffsetMinutes
           )
         })
       )
@@ -571,11 +809,17 @@ export async function POST(
       await Promise.all(
         [...partnerMap.values()].map(async (partner) => {
           const invoiceUrl = `${baseUrl}/print/invoice/vendor?partnerId=${partner.id}&month=${monthKey}&includePaid=1&autoPrint=0`
-          const msg = renderFromTemplate('whatsapp_template_done_partner_invoice_xml', templateXmlMap, {
-            partner_name: partner.name || '-',
-            booking_ref: bookingRef,
-            invoice_url: invoiceUrl,
-          })
+          const msg = renderFromPartnerTemplate(
+            partner.id,
+            doneInvoicePartnerTemplateMap,
+            'whatsapp_template_done_partner_invoice_xml',
+            templateXmlMap,
+            {
+              partner_name: partner.name || '-',
+              booking_ref: bookingRef,
+              invoice_url: invoiceUrl,
+            }
+          )
 
           if (!msg.trim()) {
             return
@@ -613,6 +857,10 @@ export async function POST(
       )
     }
 
+    if (mode === 'send' && requestedDraftIds.size > 0) {
+      drafts = drafts.filter((draft) => requestedDraftIds.has(draft.id))
+    }
+
     if (drafts.length === 0) {
       return NextResponse.json(
         { error: 'Tidak ada pesan yang dijadwalkan untuk dikirim.' },
@@ -631,6 +879,7 @@ export async function POST(
           message: draft.message,
           canSend: draft.canSend,
           error: draft.error,
+          offsetMinutes: draft.offsetMinutes,
         })),
       })
     }
@@ -644,17 +893,6 @@ export async function POST(
         },
         { status: 400 }
       )
-    }
-
-    const editMap = new Map<string, string>()
-    if (Array.isArray(body?.drafts)) {
-      for (const item of body.drafts) {
-        const id = typeof item?.id === 'string' ? item.id : null
-        const message = typeof item?.message === 'string' ? item.message : null
-        if (id && message !== null) {
-          editMap.set(id, message)
-        }
-      }
     }
 
     const results: SendResult[] = []
@@ -702,8 +940,8 @@ export async function POST(
         greenApiError = outcome.error
       }
       const failureMessage = greenApiError
-        ? `Gagal kirim ke GREEN-API (${greenApiError})`
-        : 'Gagal kirim ke GREEN-API'
+        ? `Gagal kirim ke WhatsApp gateway (${greenApiError})`
+        : 'Gagal kirim ke WhatsApp gateway'
 
       results.push({
         id: draft.id,

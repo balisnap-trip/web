@@ -43,6 +43,52 @@ interface DatabaseSyncSummary {
   totals?: DatabaseSyncTotals
 }
 
+type WhatsAppProvider = 'green_api' | 'waha'
+
+interface WhatsAppProviderFormState {
+  provider: WhatsAppProvider
+  greenApi: {
+    instanceId: string
+    apiToken: string
+    groupChatId: string
+    baseUrl: string
+    defaultCountryCode: string
+    sendMaxAttempts: number
+    requestTimeoutMs: number
+  }
+  waha: {
+    baseUrl: string
+    apiKey: string
+    session: string
+    groupChatId: string
+    defaultCountryCode: string
+    sendMaxAttempts: number
+    requestTimeoutMs: number
+  }
+}
+
+const DEFAULT_WHATSAPP_PROVIDER_SETTINGS: WhatsAppProviderFormState = {
+  provider: 'green_api',
+  greenApi: {
+    instanceId: '',
+    apiToken: '',
+    groupChatId: '',
+    baseUrl: 'https://7103.api.greenapi.com',
+    defaultCountryCode: '62',
+    sendMaxAttempts: 3,
+    requestTimeoutMs: 20000,
+  },
+  waha: {
+    baseUrl: 'http://127.0.0.1:3100',
+    apiKey: '',
+    session: 'default',
+    groupChatId: '',
+    defaultCountryCode: '62',
+    sendMaxAttempts: 3,
+    requestTimeoutMs: 20000,
+  },
+}
+
 export default function SettingsPage() {
   return (
     <Suspense
@@ -70,6 +116,9 @@ function SettingsPageInner() {
     cronInterval: 'hourly',
     cronCustomMinutes: 60,
   })
+  const [whatsappProviderSettings, setWhatsappProviderSettings] = useState<WhatsAppProviderFormState>(
+    DEFAULT_WHATSAPP_PROVIDER_SETTINGS
+  )
   const [cronLastRunAt, setCronLastRunAt] = useState<string | null>(null)
   const [cronStatus, setCronStatus] = useState<{
     running?: boolean
@@ -93,6 +142,8 @@ function SettingsPageInner() {
   const [showCleanEmailsModal, setShowCleanEmailsModal] = useState(false)
   const [savingFlags, setSavingFlags] = useState(false)
   const [flagsSavedAt, setFlagsSavedAt] = useState<string | null>(null)
+  const [savingWhatsAppProvider, setSavingWhatsAppProvider] = useState(false)
+  const [whatsappProviderSavedAt, setWhatsappProviderSavedAt] = useState<string | null>(null)
   const [syncConfigured, setSyncConfigured] = useState(false)
   const [syncSameDatabase, setSyncSameDatabase] = useState(false)
   const [syncRunning, setSyncRunning] = useState(false)
@@ -111,13 +162,15 @@ function SettingsPageInner() {
   
   const fetchSettings = async () => {
     try {
-      const [rotationRes, flagsRes, syncRes] = await Promise.all([
+      const [rotationRes, flagsRes, whatsappProviderRes, syncRes] = await Promise.all([
         fetch('/api/settings/driver-rotation'),
         fetch('/api/settings/feature-flags'),
+        fetch('/api/settings/whatsapp-provider'),
         fetch('/api/settings/sync-database'),
       ])
       const rotationData = await rotationRes.json()
       const flagsData = await flagsRes.json()
+      const whatsappProviderData = await whatsappProviderRes.json().catch(() => null)
       const syncData = await syncRes.json().catch(() => null)
 
       if (rotationData.value) {
@@ -132,6 +185,29 @@ function SettingsPageInner() {
         })
         setCronLastRunAt(flagsData.cronLastRunAt || null)
         setCronStatus(flagsData.cronStatus || null)
+      }
+      if (whatsappProviderData?.success) {
+        setWhatsappProviderSettings({
+          provider: whatsappProviderData.provider === 'waha' ? 'waha' : 'green_api',
+          greenApi: {
+            instanceId: String(whatsappProviderData.greenApi?.instanceId || ''),
+            apiToken: String(whatsappProviderData.greenApi?.apiToken || ''),
+            groupChatId: String(whatsappProviderData.greenApi?.groupChatId || ''),
+            baseUrl: String(whatsappProviderData.greenApi?.baseUrl || DEFAULT_WHATSAPP_PROVIDER_SETTINGS.greenApi.baseUrl),
+            defaultCountryCode: String(whatsappProviderData.greenApi?.defaultCountryCode || '62'),
+            sendMaxAttempts: Number(whatsappProviderData.greenApi?.sendMaxAttempts || 3),
+            requestTimeoutMs: Number(whatsappProviderData.greenApi?.requestTimeoutMs || 20000),
+          },
+          waha: {
+            baseUrl: String(whatsappProviderData.waha?.baseUrl || DEFAULT_WHATSAPP_PROVIDER_SETTINGS.waha.baseUrl),
+            apiKey: String(whatsappProviderData.waha?.apiKey || ''),
+            session: String(whatsappProviderData.waha?.session || 'default'),
+            groupChatId: String(whatsappProviderData.waha?.groupChatId || ''),
+            defaultCountryCode: String(whatsappProviderData.waha?.defaultCountryCode || '62'),
+            sendMaxAttempts: Number(whatsappProviderData.waha?.sendMaxAttempts || 3),
+            requestTimeoutMs: Number(whatsappProviderData.waha?.requestTimeoutMs || 20000),
+          },
+        })
       }
       if (syncData?.success) {
         setSyncConfigured(Boolean(syncData.configured))
@@ -269,6 +345,75 @@ function SettingsPageInner() {
     }
   }
 
+  const handleSaveWhatsAppProvider = async () => {
+    setSavingWhatsAppProvider(true)
+
+    try {
+      const res = await fetch('/api/settings/whatsapp-provider', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(whatsappProviderSettings),
+      })
+      const data = await res.json()
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to save WhatsApp provider settings')
+      }
+
+      setWhatsappProviderSettings({
+        provider: data.provider === 'waha' ? 'waha' : 'green_api',
+        greenApi: {
+          instanceId: String(data.greenApi?.instanceId || ''),
+          apiToken: String(data.greenApi?.apiToken || ''),
+          groupChatId: String(data.greenApi?.groupChatId || ''),
+          baseUrl: String(data.greenApi?.baseUrl || DEFAULT_WHATSAPP_PROVIDER_SETTINGS.greenApi.baseUrl),
+          defaultCountryCode: String(data.greenApi?.defaultCountryCode || '62'),
+          sendMaxAttempts: Number(data.greenApi?.sendMaxAttempts || 3),
+          requestTimeoutMs: Number(data.greenApi?.requestTimeoutMs || 20000),
+        },
+        waha: {
+          baseUrl: String(data.waha?.baseUrl || DEFAULT_WHATSAPP_PROVIDER_SETTINGS.waha.baseUrl),
+          apiKey: String(data.waha?.apiKey || ''),
+          session: String(data.waha?.session || 'default'),
+          groupChatId: String(data.waha?.groupChatId || ''),
+          defaultCountryCode: String(data.waha?.defaultCountryCode || '62'),
+          sendMaxAttempts: Number(data.waha?.sendMaxAttempts || 3),
+          requestTimeoutMs: Number(data.waha?.requestTimeoutMs || 20000),
+        },
+      })
+
+      toast({
+        title: 'Success',
+        description: 'WhatsApp provider settings saved successfully!',
+      })
+      notify({
+        type: 'success',
+        title: 'WhatsApp Provider Saved',
+        message: `Provider aktif: ${data.provider === 'waha' ? 'WAHA' : 'Green-API'}.`,
+      })
+      setWhatsappProviderSavedAt(new Date().toISOString())
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Failed to save WhatsApp provider settings'
+      toast({
+        title: 'Error',
+        description: message,
+        variant: 'destructive',
+      })
+      notify({
+        type: 'error',
+        title: 'Save WhatsApp Provider Failed',
+        message,
+      })
+    } finally {
+      setSavingWhatsAppProvider(false)
+    }
+  }
+
+  const handleOpenWahaQr = () => {
+    window.open('/api/settings/whatsapp-provider/qr', '_blank', 'noopener,noreferrer')
+  }
+
   const handleDatabaseSync = async () => {
     setSyncingDatabase(true)
     setSyncRunning(true)
@@ -332,6 +477,8 @@ function SettingsPageInner() {
       </div>
     )
   }
+
+  const activeWhatsAppProvider = whatsappProviderSettings.provider
   
   return (
     <div className="space-y-5 p-4">
@@ -504,6 +651,320 @@ function SettingsPageInner() {
                 {flagsSavedAt && (
                   <div className="mt-2 text-xs text-green-600">
                     Saved at {new Date(flagsSavedAt).toLocaleString('en-GB')}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>WhatsApp Provider</CardTitle>
+              <CardDescription>
+                Choose the active provider and store credentials without redeploying. The
+                enable/disable toggle above only controls sending, not which provider is selected.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <Label className="text-sm font-medium text-gray-700">Active Provider</Label>
+                  <Select
+                    value={whatsappProviderSettings.provider}
+                    onChange={(e) =>
+                      setWhatsappProviderSettings({
+                        ...whatsappProviderSettings,
+                        provider: e.target.value === 'waha' ? 'waha' : 'green_api',
+                      })
+                    }
+                    className="mt-1"
+                  >
+                    <option value="green_api">Green-API</option>
+                    <option value="waha">WAHA (Self-hosted)</option>
+                  </Select>
+                </div>
+
+                <div className="rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
+                  {activeWhatsAppProvider === 'waha'
+                    ? 'WAHA aktif: pastikan server WAHA hidup, session sudah paired, dan group chat ID memakai format WhatsApp (contoh: 1203...@g.us).'
+                    : 'Green-API aktif: isi instance ID, API token, dan group chat ID dari dashboard Green-API.'}
+                </div>
+              </div>
+
+              {activeWhatsAppProvider === 'green_api' ? (
+                <div className="space-y-4 rounded-xl border p-4">
+                  <div className="font-medium text-gray-900">Green-API Configuration</div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Instance ID</Label>
+                      <Input
+                        value={whatsappProviderSettings.greenApi.instanceId}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            greenApi: {
+                              ...whatsappProviderSettings.greenApi,
+                              instanceId: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">API Token</Label>
+                      <Input
+                        type="password"
+                        value={whatsappProviderSettings.greenApi.apiToken}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            greenApi: {
+                              ...whatsappProviderSettings.greenApi,
+                              apiToken: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Group Chat ID</Label>
+                      <Input
+                        value={whatsappProviderSettings.greenApi.groupChatId}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            greenApi: {
+                              ...whatsappProviderSettings.greenApi,
+                              groupChatId: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Base URL</Label>
+                      <Input
+                        value={whatsappProviderSettings.greenApi.baseUrl}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            greenApi: {
+                              ...whatsappProviderSettings.greenApi,
+                              baseUrl: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Default Country Code</Label>
+                      <Input
+                        value={whatsappProviderSettings.greenApi.defaultCountryCode}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            greenApi: {
+                              ...whatsappProviderSettings.greenApi,
+                              defaultCountryCode: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Max Send Attempts</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={8}
+                        value={whatsappProviderSettings.greenApi.sendMaxAttempts}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            greenApi: {
+                              ...whatsappProviderSettings.greenApi,
+                              sendMaxAttempts: Number(e.target.value || 3),
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Request Timeout (ms)</Label>
+                      <Input
+                        type="number"
+                        min={1000}
+                        max={120000}
+                        value={whatsappProviderSettings.greenApi.requestTimeoutMs}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            greenApi: {
+                              ...whatsappProviderSettings.greenApi,
+                              requestTimeoutMs: Number(e.target.value || 20000),
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 rounded-xl border p-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div className="font-medium text-gray-900">WAHA Configuration</div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleOpenWahaQr}
+                      className="shrink-0"
+                    >
+                      Buka QR Pairing
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Base URL</Label>
+                      <Input
+                        value={whatsappProviderSettings.waha.baseUrl}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            waha: {
+                              ...whatsappProviderSettings.waha,
+                              baseUrl: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Session</Label>
+                      <Input
+                        value={whatsappProviderSettings.waha.session}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            waha: {
+                              ...whatsappProviderSettings.waha,
+                              session: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">API Key (optional)</Label>
+                      <Input
+                        type="password"
+                        value={whatsappProviderSettings.waha.apiKey}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            waha: {
+                              ...whatsappProviderSettings.waha,
+                              apiKey: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Group Chat ID</Label>
+                      <Input
+                        value={whatsappProviderSettings.waha.groupChatId}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            waha: {
+                              ...whatsappProviderSettings.waha,
+                              groupChatId: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Default Country Code</Label>
+                      <Input
+                        value={whatsappProviderSettings.waha.defaultCountryCode}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            waha: {
+                              ...whatsappProviderSettings.waha,
+                              defaultCountryCode: e.target.value,
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Max Send Attempts</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={8}
+                        value={whatsappProviderSettings.waha.sendMaxAttempts}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            waha: {
+                              ...whatsappProviderSettings.waha,
+                              sendMaxAttempts: Number(e.target.value || 3),
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-700">Request Timeout (ms)</Label>
+                      <Input
+                        type="number"
+                        min={1000}
+                        max={120000}
+                        value={whatsappProviderSettings.waha.requestTimeoutMs}
+                        onChange={(e) =>
+                          setWhatsappProviderSettings({
+                            ...whatsappProviderSettings,
+                            waha: {
+                              ...whatsappProviderSettings.waha,
+                              requestTimeoutMs: Number(e.target.value || 20000),
+                            },
+                          })
+                        }
+                        className="mt-1"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 border-t">
+                <Button
+                  onClick={handleSaveWhatsAppProvider}
+                  disabled={savingWhatsAppProvider}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {savingWhatsAppProvider ? 'Saving...' : 'Save WhatsApp Provider'}
+                </Button>
+                {whatsappProviderSavedAt && (
+                  <div className="mt-2 text-xs text-green-600">
+                    Saved at {new Date(whatsappProviderSavedAt).toLocaleString('en-GB')}
                   </div>
                 )}
               </div>

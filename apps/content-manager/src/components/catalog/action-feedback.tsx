@@ -31,6 +31,9 @@ const errorMessageMap: Record<string, string> = {
   STARTER_VARIANT_NAME_REQUIRED: "Starter variant name is required.",
   STARTER_VARIANT_PRICE_REQUIRED: "Starter variant price is required.",
   RATE_PRICE_REQUIRED: "Rate price is required.",
+  CATALOG_RATE_MIN_QUANTITY_INVALID: "Min pax must be a positive number.",
+  CATALOG_RATE_MAX_QUANTITY_INVALID: "Max pax must be a positive number.",
+  CATALOG_RATE_QUANTITY_RANGE_INVALID: "Max pax must be greater than or equal to min pax.",
   "JSON_REQUIRED:content": "Content payload is required.",
   "JSON_INVALID:content": "Content payload is invalid."
 };

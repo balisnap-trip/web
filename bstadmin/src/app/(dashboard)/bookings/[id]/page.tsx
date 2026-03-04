@@ -152,6 +152,8 @@ interface WhatsAppMessageDraft {
   message: string
   canSend: boolean
   error?: string | null
+  originalMessage: string
+  isEdited: boolean
 }
 
 export default function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -168,6 +170,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   const [waDrafts, setWaDrafts] = useState<WhatsAppMessageDraft[]>([])
   const [waEditEnabled, setWaEditEnabled] = useState(false)
   const [waSending, setWaSending] = useState(false)
+  const [waSendingDraftId, setWaSendingDraftId] = useState<string | null>(null)
   const [showAssignModal, setShowAssignModal] = useState(false)
   const [selectedDriverId, setSelectedDriverId] = useState<number | null>(null)
   const [showConfirmDriverModal, setShowConfirmDriverModal] = useState(false)
@@ -285,7 +288,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
       if (data.booking?.finance) {
         setFinance({
           ...data.booking.finance,
-          items: data.booking.finance.items.map((item: any) => ({
+          items: data.booking.finance.items.map((item: { amount: unknown }) => ({
             amount: Number(item.amount),
           })),
         })
@@ -485,7 +488,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
   }
 
   const closeWaPreviewModal = () => {
-    if (waSending) return
+    if (waSending || waSendingDraftId !== null) return
     setShowWaPreviewModal(false)
     setWaPreviewType(null)
     setWaDrafts([])
@@ -512,13 +515,16 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
       const rawDrafts: unknown[] = Array.isArray(data?.drafts) ? data.drafts : []
       const drafts: WhatsAppMessageDraft[] = rawDrafts.map((raw, index) => {
         const draft = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+        const message = typeof draft.message === 'string' ? draft.message : ''
         return {
           id: typeof draft.id === 'string' ? draft.id : `draft-${index}`,
           target: typeof draft.target === 'string' ? draft.target : 'TARGET',
           phone: typeof draft.phone === 'string' ? draft.phone : null,
-          message: typeof draft.message === 'string' ? draft.message : '',
+          message,
           canSend: Boolean(draft.canSend),
           error: typeof draft.error === 'string' ? draft.error : null,
+          originalMessage: message,
+          isEdited: false,
         }
       })
 
@@ -540,14 +546,36 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
 
   const handleWaDraftMessageChange = (id: string, message: string) => {
     setWaDrafts((prev) =>
-      prev.map((draft) => (draft.id === id ? { ...draft, message } : draft))
+      prev.map((draft) =>
+        draft.id === id
+          ? {
+              ...draft,
+              message,
+              isEdited: message !== draft.originalMessage,
+            }
+          : draft
+      )
     )
   }
 
-  const handleSendWhatsAppFromModal = async () => {
-    if (!booking?.id || !waPreviewType) return
+  const sendWhatsAppDraftsFromModal = async (
+    draftsToSend: WhatsAppMessageDraft[],
+    options?: {
+      singleDraftId?: string | null
+      keepModalOpen?: boolean
+    }
+  ) => {
+    if (!booking?.id || !waPreviewType || draftsToSend.length === 0) return
 
-    setWaSending(true)
+    const singleDraftId = options?.singleDraftId ?? null
+    const keepModalOpen = Boolean(options?.keepModalOpen)
+
+    if (singleDraftId) {
+      setWaSendingDraftId(singleDraftId)
+    } else {
+      setWaSending(true)
+    }
+
     try {
       const res = await fetch(`/api/bookings/${booking.id}/whatsapp`, {
         method: 'POST',
@@ -555,9 +583,9 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
         body: JSON.stringify({
           type: waPreviewType,
           mode: 'send',
-          drafts: waDrafts.map((draft) => ({
+          drafts: draftsToSend.map((draft) => ({
             id: draft.id,
-            message: draft.message,
+            ...(draft.isEdited ? { message: draft.message } : {}),
           })),
         }),
       })
@@ -579,12 +607,57 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
         message: detail,
       })
 
+      if (keepModalOpen) {
+        const successfulIds = new Set<string>(
+          Array.isArray(data.results)
+            ? data.results.flatMap((rawResult) => {
+                const result =
+                  rawResult && typeof rawResult === 'object'
+                    ? (rawResult as Record<string, unknown>)
+                    : null
+                return result?.success && typeof result.id === 'string' ? [result.id] : []
+              })
+            : []
+        )
+
+        if (successfulIds.size > 0) {
+          const remainingDrafts = waDrafts.filter((draft) => !successfulIds.has(draft.id))
+          if (remainingDrafts.length === 0) {
+            setShowWaPreviewModal(false)
+            setWaPreviewType(null)
+            setWaDrafts([])
+            setWaEditEnabled(false)
+          } else {
+            setWaDrafts(remainingDrafts)
+          }
+        }
+        return
+      }
+
       closeWaPreviewModal()
     } catch (error) {
       notify({ type: 'error', title: 'WhatsApp Error', message: String(error) })
     } finally {
-      setWaSending(false)
+      if (singleDraftId) {
+        setWaSendingDraftId(null)
+      } else {
+        setWaSending(false)
+      }
     }
+  }
+
+  const handleSendWhatsAppFromModal = async () => {
+    await sendWhatsAppDraftsFromModal(waDrafts)
+  }
+
+  const handleSendWhatsAppDraftFromModal = async (draftId: string) => {
+    const draft = waDrafts.find((item) => item.id === draftId)
+    if (!draft) return
+
+    await sendWhatsAppDraftsFromModal([draft], {
+      singleDraftId: draftId,
+      keepModalOpen: true,
+    })
   }
 
   const handleDeleteBooking = async () => {
@@ -780,6 +853,8 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
     }, {} as Record<WhatsAppSendType, string>)
   const waPreviewLabel = waPreviewType ? waActionLabelMap[waPreviewType] || waPreviewType : 'Preview Pesan'
   const waSendableCount = waDrafts.filter((draft) => draft.canSend).length
+  const isWaBusy = waSending || waSendingDraftId !== null
+  const supportsPerDraftSend = waPreviewType === 'READY_PARTNERS'
 
   const pendingDriver =
     pendingDriverId == null
@@ -2039,10 +2114,10 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
         <DialogContent
           className="max-w-3xl p-4 shadow-2xl"
           onEscapeKeyDown={(e) => {
-            if (waSending) e.preventDefault()
+            if (isWaBusy) e.preventDefault()
           }}
           onInteractOutside={(e) => {
-            if (waSending) e.preventDefault()
+            if (isWaBusy) e.preventDefault()
           }}
         >
           <div className="flex items-start justify-between gap-4 mb-4">
@@ -2066,28 +2141,43 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             </div>
           ) : (
             <div className="max-h-[55vh] overflow-y-auto pr-1 space-y-3">
-              {waDrafts.map((draft) => (
-                <div key={draft.id} className="rounded-lg border border-gray-200 p-3">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="text-sm font-semibold text-gray-900">{draft.target}</div>
-                    <div className={`text-xs font-medium ${draft.canSend ? 'text-emerald-700' : 'text-red-600'}`}>
-                      {draft.canSend ? 'Siap dikirim' : 'Tidak bisa dikirim'}
+              {waDrafts.map((draft) => {
+                return (
+                  <div key={draft.id} className="rounded-lg border border-gray-200 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="text-sm font-semibold text-gray-900">{draft.target}</div>
+                      <div className="flex items-center gap-2">
+                        <div className={`text-xs font-medium ${draft.canSend ? 'text-emerald-700' : 'text-red-600'}`}>
+                          {draft.canSend ? 'Siap dikirim' : 'Tidak bisa dikirim'}
+                        </div>
+                        {supportsPerDraftSend ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => handleSendWhatsAppDraftFromModal(draft.id)}
+                            disabled={isWaBusy || !draft.canSend}
+                            className="h-8 px-3 text-xs"
+                          >
+                            {waSendingDraftId === draft.id ? 'Mengirim...' : 'Kirim'}
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
+                    {draft.phone ? (
+                      <div className="text-xs text-gray-500 mb-2">WA: {draft.phone}</div>
+                    ) : null}
+                    {draft.error ? (
+                      <div className="text-xs text-red-600 mb-2">{draft.error}</div>
+                    ) : null}
+                    <Textarea
+                      value={draft.message}
+                      onChange={(e) => handleWaDraftMessageChange(draft.id, e.target.value)}
+                      disabled={!waEditEnabled || isWaBusy}
+                      className="min-h-40 text-xs leading-relaxed"
+                    />
                   </div>
-                  {draft.phone ? (
-                    <div className="text-xs text-gray-500 mb-2">WA: {draft.phone}</div>
-                  ) : null}
-                  {draft.error ? (
-                    <div className="text-xs text-red-600 mb-2">{draft.error}</div>
-                  ) : null}
-                  <Textarea
-                    value={draft.message}
-                    onChange={(e) => handleWaDraftMessageChange(draft.id, e.target.value)}
-                    disabled={!waEditEnabled}
-                    className="min-h-40 text-xs leading-relaxed"
-                  />
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
 
@@ -2095,7 +2185,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <Button
               variant="outline"
               onClick={closeWaPreviewModal}
-              disabled={waSending}
+              disabled={isWaBusy}
               className="flex-1"
             >
               Close
@@ -2103,7 +2193,7 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             <Button
               variant="outline"
               onClick={() => setWaEditEnabled((prev) => !prev)}
-              disabled={waSending || waDrafts.length === 0}
+              disabled={isWaBusy || waDrafts.length === 0}
               className="flex-1"
             >
               <Edit className="h-4 w-4" />
@@ -2111,10 +2201,14 @@ export default function BookingDetailPage({ params }: { params: Promise<{ id: st
             </Button>
             <Button
               onClick={handleSendWhatsAppFromModal}
-              disabled={waSending || waDrafts.length === 0 || waSendableCount === 0}
+              disabled={isWaBusy || waDrafts.length === 0 || waSendableCount === 0}
               className="flex-1"
             >
-              {waSending ? 'Mengirim...' : 'Kirim Pesan'}
+              {waSending
+                ? 'Mengirim...'
+                : supportsPerDraftSend
+                  ? 'Kirim Semua'
+                  : 'Kirim Pesan'}
             </Button>
           </div>
         </DialogContent>

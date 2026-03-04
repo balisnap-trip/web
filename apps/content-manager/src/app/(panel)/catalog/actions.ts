@@ -96,6 +96,28 @@ function readOptionalNumber(formData: FormData, key: string): number | undefined
   return parsed;
 }
 
+function readOptionalNumberOrNull(formData: FormData, key: string): number | null | undefined {
+  const raw = formData.get(key);
+  if (raw === null || raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== "string") {
+    throw new Error(`INVALID_NUMBER:${key}`);
+  }
+
+  const normalized = raw.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`INVALID_NUMBER:${key}`);
+  }
+
+  return parsed;
+}
+
 function readTravelerType(formData: FormData, key: string, fallback: TravelerType): TravelerType {
   const rawValue = readOptionalString(formData, key) || fallback;
   const normalized = rawValue.trim().toUpperCase();
@@ -143,6 +165,8 @@ function buildStarterVariantInput(formData: FormData) {
   const durationDays = readOptionalNumber(formData, "starterVariantDurationDays") ?? 1;
   const currencyCode = readOptionalString(formData, "starterVariantCurrencyCode") || "USD";
   const travelerType = readTravelerType(formData, "starterVariantTravelerType", "ADULT");
+  const minQuantity = readOptionalNumber(formData, "starterVariantMinQuantity");
+  const maxQuantity = readOptionalNumber(formData, "starterVariantMaxQuantity");
 
   return {
     code,
@@ -156,6 +180,8 @@ function buildStarterVariantInput(formData: FormData) {
         travelerType,
         price,
         currencyCode,
+        minQuantity,
+        maxQuantity,
         isActive: true
       }
     ]
@@ -310,6 +336,8 @@ export async function createCatalogVariantAction(formData: FormData) {
                 travelerType,
                 price,
                 currencyCode: readOptionalString(formData, "rateCurrencyCode"),
+                minQuantity: readOptionalNumber(formData, "rateMinQuantity"),
+                maxQuantity: readOptionalNumber(formData, "rateMaxQuantity"),
                 isActive: true
               }
             ]
@@ -405,6 +433,8 @@ export async function createCatalogRateAction(formData: FormData) {
       travelerType: (readString(formData, "travelerType") || "ADULT") as "ADULT" | "CHILD" | "INFANT",
       currencyCode: readOptionalString(formData, "currencyCode"),
       price,
+      minQuantity: readOptionalNumber(formData, "minQuantity"),
+      maxQuantity: readOptionalNumber(formData, "maxQuantity"),
       isActive: readBoolean(formData, "isActive")
     }, { actor });
 
@@ -435,6 +465,8 @@ export async function updateCatalogRateAction(formData: FormData) {
       travelerType: readOptionalString(formData, "travelerType") as "ADULT" | "CHILD" | "INFANT" | undefined,
       currencyCode: readOptionalString(formData, "currencyCode"),
       price: readOptionalNumber(formData, "price"),
+      minQuantity: readOptionalNumberOrNull(formData, "minQuantity"),
+      maxQuantity: readOptionalNumberOrNull(formData, "maxQuantity"),
       isActive: readBoolean(formData, "isActive")
     }, { actor });
 

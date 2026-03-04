@@ -43,6 +43,7 @@ interface Partner {
 interface PatternItemForm {
   serviceItemId: string
   defaultPartnerId: string
+  partnerTimeOffsetMinutes: number
   defaultUnitType: string
   defaultQty: number
   defaultPrice: number
@@ -60,6 +61,7 @@ interface Pattern {
     serviceItem: ServiceItem
     defaultPartnerId: number | null
     defaultPartner?: Partner | null
+    partnerTimeOffsetMinutes: number
     defaultUnitType: string
     defaultQty: number
     defaultPrice: number
@@ -68,6 +70,10 @@ interface Pattern {
 
 const formatCategory = (service?: ServiceItem | null) =>
   service?.tourItemCategoryRef?.name || '-'
+const formatOffsetMinutes = (value: number) => {
+  if (value === 0) return '0 min'
+  return `${value > 0 ? '+' : ''}${value} min`
+}
 
 export default function FinancePatternsPage() {
   const [patterns, setPatterns] = useState<Pattern[]>([])
@@ -177,6 +183,7 @@ export default function FinancePatternsPage() {
               ? String(item.defaultPartnerId)
               : autoPartnerId || NO_PARTNER_VALUE
             : '',
+          partnerTimeOffsetMinutes: Number(item.partnerTimeOffsetMinutes ?? 0),
           defaultUnitType: item.defaultUnitType,
           defaultQty: item.defaultQty,
           defaultPrice: item.defaultPrice,
@@ -205,6 +212,7 @@ export default function FinancePatternsPage() {
         {
           serviceItemId: firstService?.id ? String(firstService.id) : '',
           defaultPartnerId: partnerAllowed ? (autoPartnerId || NO_PARTNER_VALUE) : '',
+          partnerTimeOffsetMinutes: 0,
           defaultUnitType: 'PER_BOOKING',
           defaultQty: 1,
           defaultPrice: 0,
@@ -281,6 +289,9 @@ export default function FinancePatternsPage() {
         items: resolvedItems.map((item, index) => ({
           ...item,
           defaultPartnerId: item.defaultPartnerId === NO_PARTNER_VALUE ? null : item.defaultPartnerId || null,
+          partnerTimeOffsetMinutes: Number.isFinite(Number(item.partnerTimeOffsetMinutes))
+            ? Math.round(Number(item.partnerTimeOffsetMinutes))
+            : 0,
           defaultQty: Number(item.defaultQty),
           defaultPrice: Number(item.defaultPrice),
           position: index,
@@ -401,6 +412,7 @@ export default function FinancePatternsPage() {
                       <TableRow>
                         <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Item</TableHead>
                         <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Partner</TableHead>
+                        <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Arrival Offset</TableHead>
                         <TableHead className="px-3 py-2 normal-case tracking-normal text-gray-600">Unit</TableHead>
                         <TableHead className="px-3 py-2 text-right normal-case tracking-normal text-gray-600">Qty</TableHead>
                         <TableHead className="px-3 py-2 text-right normal-case tracking-normal text-gray-600">Price</TableHead>
@@ -418,6 +430,9 @@ export default function FinancePatternsPage() {
                               payeeMode: item.serviceItem.tourItemCategoryRef?.payeeMode,
                               partnerName: item.defaultPartner?.name,
                             })}
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-xs text-gray-600">
+                            {formatOffsetMinutes(Number(item.partnerTimeOffsetMinutes ?? 0))}
                           </TableCell>
                           <TableCell className="px-3 py-2">{item.defaultUnitType}</TableCell>
                           <TableCell className="px-3 py-2 text-right">{item.defaultQty}</TableCell>
@@ -450,7 +465,7 @@ export default function FinancePatternsPage() {
       </div>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-4">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-5">
           <DialogHeader>
             <DialogTitle>
               {editingPattern ? 'Edit Cost Template' : 'Add Cost Template'}
@@ -458,51 +473,65 @@ export default function FinancePatternsPage() {
           </DialogHeader>
 
           <form className="space-y-4" onSubmit={handleSave}>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="space-y-1">
+              <div className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                  Template Info
+                </div>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="space-y-1">
                   <Label>Template Name</Label>
                   <Input
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Pattern A-1"
                   />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Package</Label>
+                    <Select
+                      value={formData.packageId}
+                      onChange={(e) => setFormData({ ...formData, packageId: e.target.value })}
+                    >
+                      <option value="">Select package</option>
+                      {packageOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div className="flex items-end">
+                    <label className="flex h-10 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 text-sm text-gray-700">
+                      <Checkbox
+                        checked={formData.isActive}
+                        onChange={(e) =>
+                          setFormData({ ...formData, isActive: e.target.checked })
+                        }
+                      />
+                      Active
+                    </label>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label>Package</Label>
-                  <Select
-                    value={formData.packageId}
-                    onChange={(e) => setFormData({ ...formData, packageId: e.target.value })}
-                  >
-                    <option value="">Select package</option>
-                    {packageOptions.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <label className="flex items-center gap-2 pt-6 text-sm text-gray-700">
-                  <Checkbox
-                    checked={formData.isActive}
-                    onChange={(e) =>
-                      setFormData({ ...formData, isActive: e.target.checked })
-                    }
-                  />
-                  Active
-                </label>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label>Items</Label>
+                  <div>
+                    <Label>Items</Label>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      Atur item biaya, partner, dan jam kedatangan tamu per item.
+                    </div>
+                  </div>
                   <Button type="button" variant="outline" size="sm" onClick={handleAddItem}>
                     <Plus className="h-4 w-4 mr-1" />
                     Add Item
                   </Button>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {formData.items.length === 0 && (
-                    <div className="text-xs text-gray-500">No items yet. Add at least 1 item.</div>
+                    <div className="rounded-lg border border-dashed border-gray-300 p-4 text-center text-xs text-gray-500">
+                      No items yet. Add at least 1 item.
+                    </div>
                   )}
                   {formData.items.map((item, index) => {
                     const selectedService = serviceOptions.find((service) => String(service.id) === item.serviceItemId)
@@ -517,41 +546,55 @@ export default function FinancePatternsPage() {
                             : ''
                         : ''
                     return (
-                    <div key={index} className="grid grid-cols-1 gap-2 rounded-lg border p-3 md:grid-cols-8">
-                      <div className="md:col-span-2">
-                        <Label className="text-xs">Item</Label>
-                        <Select
-                          value={item.serviceItemId}
-                            onChange={(e) => {
-                              const nextId = e.target.value
-                              const nextService = serviceOptions.find((service) => String(service.id) === nextId)
-                              const nextPartnerAllowed = canPartner(nextService?.tourItemCategoryRef?.payeeMode)
-                              const nextAutoPartnerId =
-                                nextService && nextPartnerAllowed
-                                  ? nextService.defaultPartnerId
-                                    ? String(nextService.defaultPartnerId)
-                                    : nextService.partners?.length === 1
-                                      ? String(nextService.partners[0].id)
-                                      : ''
-                                  : ''
-                              updateItem(index, {
-                                serviceItemId: nextId,
-                                defaultPartnerId:
-                                  nextPartnerAllowed
-                                    ? nextAutoPartnerId || item.defaultPartnerId || NO_PARTNER_VALUE
-                                    : '',
-                              })
-                            }}
-                        >
-                          {serviceOptions.map((service) => (
-                            <option key={service.id} value={service.id}>
-                            {service.name} ({formatCategory(service)})
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                      <div className="md:col-span-2">
-                        <Label className="text-xs">Partner</Label>
+                      <div key={index} className="rounded-lg border border-gray-200 bg-white p-3">
+                        <div className="mb-3 flex items-center justify-between">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            Item #{index + 1}
+                          </div>
+                          <Button type="button" variant="outline" size="sm" onClick={() => handleRemoveItem(index)}>
+                            Remove
+                          </Button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+                          <div>
+                            <Label className="text-xs">Item</Label>
+                            <Select
+                              value={item.serviceItemId}
+                              onChange={(e) => {
+                                const nextId = e.target.value
+                                const nextService = serviceOptions.find((service) => String(service.id) === nextId)
+                                const nextPartnerAllowed = canPartner(nextService?.tourItemCategoryRef?.payeeMode)
+                                const nextAutoPartnerId =
+                                  nextService && nextPartnerAllowed
+                                    ? nextService.defaultPartnerId
+                                      ? String(nextService.defaultPartnerId)
+                                      : nextService.partners?.length === 1
+                                        ? String(nextService.partners[0].id)
+                                        : ''
+                                    : ''
+                                updateItem(index, {
+                                  serviceItemId: nextId,
+                                  defaultPartnerId:
+                                    nextPartnerAllowed
+                                      ? nextAutoPartnerId || item.defaultPartnerId || NO_PARTNER_VALUE
+                                      : '',
+                                  partnerTimeOffsetMinutes: nextPartnerAllowed
+                                    ? item.partnerTimeOffsetMinutes
+                                    : 0,
+                                })
+                              }}
+                            >
+                              {serviceOptions.map((service) => (
+                                <option key={service.id} value={service.id}>
+                                  {service.name} ({formatCategory(service)})
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+
+                          <div>
+                            <Label className="text-xs">Partner</Label>
                           <Select
                             value={item.defaultPartnerId || autoPartnerId || NO_PARTNER_VALUE}
                             onChange={(e) => updateItem(index, { defaultPartnerId: e.target.value })}
@@ -570,48 +613,71 @@ export default function FinancePatternsPage() {
                               </option>
                             ))}
                           </Select>
-                        {partnerAllowed && !item.defaultPartnerId && (
-                          <div className="mt-1 text-[11px] text-amber-600">
-                            Select a partner to save this template.
+                            {partnerAllowed && !item.defaultPartnerId && (
+                              <div className="mt-1 text-[11px] text-amber-600">
+                                Select a partner to save this template.
+                              </div>
+                            )}
                           </div>
-                        )}
+
+                          <div>
+                            <Label className="text-xs">Jam Kedatangan Tamu (offset menit)</Label>
+                            <Input
+                              type="number"
+                              step={1}
+                              min={-1440}
+                              max={1440}
+                              value={item.partnerTimeOffsetMinutes}
+                              onChange={(e) =>
+                                updateItem(index, {
+                                  partnerTimeOffsetMinutes: Number.isFinite(Number(e.target.value))
+                                    ? Math.round(Number(e.target.value))
+                                    : 0,
+                                })
+                              }
+                              disabled={!partnerAllowed}
+                            />
+                            <div className="mt-1 text-[11px] text-gray-500">
+                              {partnerAllowed
+                                ? 'Default jam di pesan partner = jam tour booking + offset ini (contoh: 60 = +1 jam, 150 = +2.5 jam).'
+                                : 'Hanya dipakai jika item dibayarkan ke partner.'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          <div>
+                            <Label className="text-xs">Unit</Label>
+                            <Select
+                              value={item.defaultUnitType}
+                              onChange={(e) => updateItem(index, { defaultUnitType: e.target.value })}
+                            >
+                              {UNIT_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-xs">Qty</Label>
+                            <Input
+                              type="number"
+                              value={item.defaultQty}
+                              onChange={(e) => updateItem(index, { defaultQty: Number(e.target.value) })}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Price</Label>
+                            <Input
+                              type="number"
+                              value={item.defaultPrice}
+                              onChange={(e) => updateItem(index, { defaultPrice: Number(e.target.value) })}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <Label className="text-xs">Unit</Label>
-                        <Select
-                          value={item.defaultUnitType}
-                          onChange={(e) => updateItem(index, { defaultUnitType: e.target.value })}
-                        >
-                          {UNIT_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </option>
-                          ))}
-                        </Select>
-                      </div>
-                      <div>
-                        <Label className="text-xs">Qty</Label>
-                        <Input
-                          type="number"
-                          value={item.defaultQty}
-                          onChange={(e) => updateItem(index, { defaultQty: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Price</Label>
-                        <Input
-                          type="number"
-                          value={item.defaultPrice}
-                          onChange={(e) => updateItem(index, { defaultPrice: Number(e.target.value) })}
-                        />
-                      </div>
-                      <div className="flex items-end">
-                        <Button type="button" variant="outline" size="sm" onClick={() => handleRemoveItem(index)}>
-                          Remove
-                        </Button>
-                      </div>
-                    </div>
-                  )})}
+                    )})}
                 </div>
               </div>
 

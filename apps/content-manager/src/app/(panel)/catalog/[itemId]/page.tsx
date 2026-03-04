@@ -52,6 +52,22 @@ interface CatalogItemDetailPageProps {
 
 const travelerTypeOptions = ["ADULT", "CHILD", "INFANT"] as const;
 
+function formatRateTierLabel(
+  minQuantity: number | null | undefined,
+  maxQuantity: number | null | undefined
+): string {
+  if (minQuantity !== null && maxQuantity !== null) {
+    return `${minQuantity}-${maxQuantity} pax`;
+  }
+  if (minQuantity !== null) {
+    return `${minQuantity}+ pax`;
+  }
+  if (maxQuantity !== null) {
+    return `1-${maxQuantity} pax`;
+  }
+  return "Any pax";
+}
+
 export default async function CatalogItemDetailPage({ params, searchParams }: CatalogItemDetailPageProps) {
   const session = await getServerSession(authOptions);
   if (!session?.user || !isAllowedRole(session.user.role)) {
@@ -239,10 +255,10 @@ export default async function CatalogItemDetailPage({ params, searchParams }: Ca
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Add Variant</CardTitle>
-              <CardDescription>Create a new variant with an optional initial rate.</CardDescription>
+              <CardDescription>Create a new variant with an optional initial tier rate.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form action={createCatalogVariantAction} className="grid gap-3 md:grid-cols-4">
+              <form action={createCatalogVariantAction} className="grid gap-3 md:grid-cols-5">
                 <input type="hidden" name="itemId" value={item.itemId} />
 
                 <FormField label="Code" htmlFor="catalog-variant-create-code" required>
@@ -316,6 +332,28 @@ export default async function CatalogItemDetailPage({ params, searchParams }: Ca
                     id="catalog-variant-create-rate-currency"
                     name="rateCurrencyCode"
                     defaultValue="USD"
+                    disabled={!canEdit}
+                  />
+                </FormField>
+
+                <FormField label="Initial Min Pax" htmlFor="catalog-variant-create-rate-min-quantity">
+                  <Input
+                    id="catalog-variant-create-rate-min-quantity"
+                    name="rateMinQuantity"
+                    type="number"
+                    min={1}
+                    defaultValue={1}
+                    disabled={!canEdit}
+                  />
+                </FormField>
+
+                <FormField label="Initial Max Pax" htmlFor="catalog-variant-create-rate-max-quantity">
+                  <Input
+                    id="catalog-variant-create-rate-max-quantity"
+                    name="rateMaxQuantity"
+                    type="number"
+                    min={1}
+                    placeholder="optional"
                     disabled={!canEdit}
                   />
                 </FormField>
@@ -483,7 +521,7 @@ export default async function CatalogItemDetailPage({ params, searchParams }: Ca
 
                     <Card className="border-dashed">
                       <CardContent className="p-4">
-                        <form action={createCatalogRateAction} className="grid gap-3 md:grid-cols-5">
+                        <form action={createCatalogRateAction} className="grid gap-3 md:grid-cols-7">
                           <input type="hidden" name="itemId" value={item.itemId} />
                           <input type="hidden" name="variantId" value={variant.variantId} />
 
@@ -522,6 +560,28 @@ export default async function CatalogItemDetailPage({ params, searchParams }: Ca
                             />
                           </FormField>
 
+                          <FormField label="Min Pax" htmlFor={`variant-${variant.variantId}-rate-min-quantity`}>
+                            <Input
+                              id={`variant-${variant.variantId}-rate-min-quantity`}
+                              name="minQuantity"
+                              type="number"
+                              min={1}
+                              defaultValue={1}
+                              disabled={!canEdit}
+                            />
+                          </FormField>
+
+                          <FormField label="Max Pax" htmlFor={`variant-${variant.variantId}-rate-max-quantity`}>
+                            <Input
+                              id={`variant-${variant.variantId}-rate-max-quantity`}
+                              name="maxQuantity"
+                              type="number"
+                              min={1}
+                              placeholder="optional"
+                              disabled={!canEdit}
+                            />
+                          </FormField>
+
                           <div className="flex items-end">
                             <label
                               htmlFor={`variant-${variant.variantId}-rate-active`}
@@ -553,6 +613,7 @@ export default async function CatalogItemDetailPage({ params, searchParams }: Ca
                           <TableHeader className="bg-slate-50/80">
                             <TableRow>
                               <TableHead>Traveler</TableHead>
+                              <TableHead>Pax Tier</TableHead>
                               <TableHead>Currency</TableHead>
                               <TableHead>Price</TableHead>
                               <TableHead>Active</TableHead>
@@ -563,6 +624,7 @@ export default async function CatalogItemDetailPage({ params, searchParams }: Ca
                             {variant.rates.map((rate) => (
                               <TableRow key={rate.rateId} className="hover:bg-slate-50/80">
                                 <TableCell>{rate.travelerType}</TableCell>
+                                <TableCell>{formatRateTierLabel(rate.minQuantity, rate.maxQuantity)}</TableCell>
                                 <TableCell>{rate.currencyCode}</TableCell>
                                 <TableCell>{rate.price}</TableCell>
                                 <TableCell>
@@ -594,6 +656,24 @@ export default async function CatalogItemDetailPage({ params, searchParams }: Ca
                                         min={0}
                                         defaultValue={rate.price}
                                         className="h-8 w-24 rounded text-xs"
+                                        disabled={!canEdit}
+                                      />
+                                      <Input
+                                        name="minQuantity"
+                                        type="number"
+                                        min={1}
+                                        defaultValue={rate.minQuantity ?? ""}
+                                        className="h-8 w-24 rounded text-xs"
+                                        placeholder="min pax"
+                                        disabled={!canEdit}
+                                      />
+                                      <Input
+                                        name="maxQuantity"
+                                        type="number"
+                                        min={1}
+                                        defaultValue={rate.maxQuantity ?? ""}
+                                        className="h-8 w-24 rounded text-xs"
+                                        placeholder="max pax"
                                         disabled={!canEdit}
                                       />
                                       <label htmlFor={`rate-${rate.rateId}-active`} className="inline-flex items-center gap-1 text-xs">

@@ -5,6 +5,8 @@ export interface CatalogRateDto {
   travelerType: "ADULT" | "CHILD" | "INFANT";
   currencyCode: string;
   price: number;
+  minQuantity: number | null;
+  maxQuantity: number | null;
   isActive: boolean;
 }
 
@@ -135,6 +137,8 @@ export interface CatalogRateCreateInput {
   travelerType: "ADULT" | "CHILD" | "INFANT";
   currencyCode?: string;
   price: number;
+  minQuantity?: number | null;
+  maxQuantity?: number | null;
   isActive?: boolean;
 }
 
@@ -142,6 +146,8 @@ export interface CatalogRatePatchInput {
   travelerType?: "ADULT" | "CHILD" | "INFANT";
   currencyCode?: string;
   price?: number;
+  minQuantity?: number | null;
+  maxQuantity?: number | null;
   isActive?: boolean;
 }
 

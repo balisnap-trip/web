@@ -22,7 +22,9 @@ import {
   Mail,
   Plus,
   Star,
-  Calendar
+  Calendar,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { useNotifications } from '@/hooks/use-notifications'
 
@@ -59,6 +61,7 @@ export default function DriversPage() {
   const [loading, setLoading] = useState(true)
   const [templateLoading, setTemplateLoading] = useState(true)
   const [templateSavingKey, setTemplateSavingKey] = useState<string | null>(null)
+  const [showGlobalTemplates, setShowGlobalTemplates] = useState(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -205,45 +208,69 @@ export default function DriversPage() {
       </div>
 
       <Card className="p-4">
-        <div className="mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">WhatsApp XML Templates (Driver)</h2>
-          <p className="text-sm text-gray-600">
-            Template ini dipakai untuk pesan WA ke driver dari fitur kirim WA booking.
-          </p>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">WhatsApp XML Templates (Driver)</h2>
+            <p className="text-sm text-gray-600">
+              Template ini dipakai untuk pesan WA ke driver dari fitur kirim WA booking.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowGlobalTemplates((prev) => !prev)}
+          >
+            {showGlobalTemplates ? (
+              <>
+                <ChevronUp className="h-4 w-4 mr-1" />
+                Hide
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4 mr-1" />
+                Show
+              </>
+            )}
+          </Button>
         </div>
 
-        {templateLoading ? (
-          <div className="text-sm text-gray-600">Loading templates...</div>
-        ) : driverTemplates.length === 0 ? (
-          <div className="text-sm text-gray-600">Template driver belum tersedia.</div>
-        ) : (
-          <div className="space-y-4">
-            {driverTemplates.map((template) => (
-              <div key={template.key} className="rounded-lg border border-gray-200 p-3">
-                <div className="mb-2">
-                  <div className="font-semibold text-gray-900">{template.title}</div>
-                  <div className="text-xs text-gray-600">{template.description}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Placeholders: {template.placeholders.map((item) => `{{${item}}}`).join(', ')}
+        {showGlobalTemplates ? (
+          templateLoading ? (
+            <div className="text-sm text-gray-600">Loading templates...</div>
+          ) : driverTemplates.length === 0 ? (
+            <div className="text-sm text-gray-600">Template driver belum tersedia.</div>
+          ) : (
+            <div className="space-y-4">
+              {driverTemplates.map((template) => (
+                <div key={template.key} className="rounded-lg border border-gray-200 p-3">
+                  <div className="mb-2">
+                    <div className="font-semibold text-gray-900">{template.title}</div>
+                    <div className="text-xs text-gray-600">{template.description}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Placeholders: {template.placeholders.map((item) => `{{${item}}}`).join(', ')}
+                    </div>
+                  </div>
+                  <Textarea
+                    value={template.xml}
+                    onChange={(e) => updateDriverTemplateXml(template.key, e.target.value)}
+                    className="min-h-56 font-mono text-xs"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      size="sm"
+                      onClick={() => saveDriverTemplate(template)}
+                      disabled={templateSavingKey === template.key}
+                    >
+                      {templateSavingKey === template.key ? 'Saving...' : 'Save XML'}
+                    </Button>
                   </div>
                 </div>
-                <Textarea
-                  value={template.xml}
-                  onChange={(e) => updateDriverTemplateXml(template.key, e.target.value)}
-                  className="min-h-56 font-mono text-xs"
-                />
-                <div className="mt-2 flex justify-end">
-                  <Button
-                    size="sm"
-                    onClick={() => saveDriverTemplate(template)}
-                    disabled={templateSavingKey === template.key}
-                  >
-                    {templateSavingKey === template.key ? 'Saving...' : 'Save XML'}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="text-sm text-gray-500">Template disembunyikan.</div>
         )}
       </Card>
 

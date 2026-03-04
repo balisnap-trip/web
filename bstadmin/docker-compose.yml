@@ -16,6 +16,18 @@ services:
       - INTERNAL_CRON_BASE_URL=http://127.0.0.1:3100
       - CRON_INITIAL_DELAY_MS=30000
     restart: unless-stopped
+    depends_on:
+      - waha
+  waha:
+    container_name: bstadmin-waha
+    image: devlikeapro/waha:latest
+    ports:
+      - "127.0.0.1:3001:3100"
+    env_file:
+      - .env
+    volumes:
+      - ./data/waha/sessions:/app/.sessions
+    restart: unless-stopped
   gh-runner:
     container_name: bstadmin-runner
     build:

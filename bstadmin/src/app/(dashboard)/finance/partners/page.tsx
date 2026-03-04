@@ -16,8 +16,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, Edit, Trash2, Phone, User, Store } from 'lucide-react'
+import { Plus, Edit, Trash2, Phone, User, Store, ChevronDown, ChevronUp } from 'lucide-react'
 import { useNotifications } from '@/hooks/use-notifications'
+import { getWhatsAppTemplateDefinition } from '@/lib/whatsapp/templates'
 
 interface Partner {
   id: number
@@ -31,6 +32,10 @@ interface Partner {
   picWhatsapp: string | null
   isActive: boolean
   notes: string | null
+  waReadyTemplateXml?: string | null
+  waReadyTemplateIsCustom?: boolean
+  waDoneInvoiceTemplateXml?: string | null
+  waDoneInvoiceTemplateIsCustom?: boolean
 }
 
 interface CategoryOption {
@@ -53,6 +58,12 @@ const formatCategory = (partner: Partner) =>
   partner.financeCategoryRef?.name ||
   partner.tourItemCategoryRef?.name ||
   (partner.category ? partner.category : 'Other')
+const READY_PARTNER_PLACEHOLDERS = getWhatsAppTemplateDefinition(
+  'whatsapp_template_ready_partner_xml'
+).placeholders
+const DONE_PARTNER_PLACEHOLDERS = getWhatsAppTemplateDefinition(
+  'whatsapp_template_done_partner_invoice_xml'
+).placeholders
 
 export default function FinancePartnersPage() {
   const [partners, setPartners] = useState<Partner[]>([])
@@ -61,6 +72,7 @@ export default function FinancePartnersPage() {
   const [loading, setLoading] = useState(true)
   const [templateLoading, setTemplateLoading] = useState(true)
   const [templateSavingKey, setTemplateSavingKey] = useState<string | null>(null)
+  const [showGlobalTemplates, setShowGlobalTemplates] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [editingPartner, setEditingPartner] = useState<Partner | null>(null)
   const [saving, setSaving] = useState(false)
@@ -72,6 +84,8 @@ export default function FinancePartnersPage() {
     picName: '',
     picWhatsapp: '',
     notes: '',
+    waReadyTemplateXml: '',
+    waDoneInvoiceTemplateXml: '',
     isActive: true,
   })
 
@@ -148,6 +162,8 @@ export default function FinancePartnersPage() {
       picName: '',
       picWhatsapp: '',
       notes: '',
+      waReadyTemplateXml: '',
+      waDoneInvoiceTemplateXml: '',
       isActive: true,
     })
     setEditingPartner(null)
@@ -167,6 +183,8 @@ export default function FinancePartnersPage() {
       picName: partner.picName || '',
       picWhatsapp: partner.picWhatsapp || '',
       notes: partner.notes || '',
+      waReadyTemplateXml: partner.waReadyTemplateXml || '',
+      waDoneInvoiceTemplateXml: partner.waDoneInvoiceTemplateXml || '',
       isActive: partner.isActive,
     })
     setShowModal(true)
@@ -189,6 +207,8 @@ export default function FinancePartnersPage() {
         picName: formData.picName || null,
         picWhatsapp: formData.picWhatsapp || null,
         notes: formData.notes || null,
+        waReadyTemplateXml: formData.waReadyTemplateXml.trim() || null,
+        waDoneInvoiceTemplateXml: formData.waDoneInvoiceTemplateXml.trim() || null,
       }
 
       const res = await fetch(editingPartner ? `/api/partners/${editingPartner.id}` : '/api/partners', {
@@ -253,45 +273,69 @@ export default function FinancePartnersPage() {
       </div>
 
       <Card className="p-4">
-        <div className="mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">WhatsApp XML Templates (Partner)</h2>
-          <p className="text-sm text-gray-600">
-            Template ini dipakai untuk pesan WA ke partner dari fitur kirim WA booking.
-          </p>
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">WhatsApp XML Templates (Partner)</h2>
+            <p className="text-sm text-gray-600">
+              Template ini dipakai untuk pesan WA ke partner dari fitur kirim WA booking.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowGlobalTemplates((prev) => !prev)}
+          >
+            {showGlobalTemplates ? (
+              <>
+                <ChevronUp className="h-4 w-4 mr-1" />
+                Hide
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4 mr-1" />
+                Show
+              </>
+            )}
+          </Button>
         </div>
 
-        {templateLoading ? (
-          <div className="text-sm text-gray-600">Loading templates...</div>
-        ) : partnerTemplates.length === 0 ? (
-          <div className="text-sm text-gray-600">Template partner belum tersedia.</div>
-        ) : (
-          <div className="space-y-4">
-            {partnerTemplates.map((template) => (
-              <div key={template.key} className="rounded-lg border border-gray-200 p-3">
-                <div className="mb-2">
-                  <div className="font-semibold text-gray-900">{template.title}</div>
-                  <div className="text-xs text-gray-600">{template.description}</div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Placeholders: {template.placeholders.map((item) => `{{${item}}}`).join(', ')}
+        {showGlobalTemplates ? (
+          templateLoading ? (
+            <div className="text-sm text-gray-600">Loading templates...</div>
+          ) : partnerTemplates.length === 0 ? (
+            <div className="text-sm text-gray-600">Template partner belum tersedia.</div>
+          ) : (
+            <div className="space-y-4">
+              {partnerTemplates.map((template) => (
+                <div key={template.key} className="rounded-lg border border-gray-200 p-3">
+                  <div className="mb-2">
+                    <div className="font-semibold text-gray-900">{template.title}</div>
+                    <div className="text-xs text-gray-600">{template.description}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Placeholders: {template.placeholders.map((item) => `{{${item}}}`).join(', ')}
+                    </div>
+                  </div>
+                  <Textarea
+                    value={template.xml}
+                    onChange={(e) => updatePartnerTemplateXml(template.key, e.target.value)}
+                    className="min-h-56 font-mono text-xs"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <Button
+                      size="sm"
+                      onClick={() => savePartnerTemplate(template)}
+                      disabled={templateSavingKey === template.key}
+                    >
+                      {templateSavingKey === template.key ? 'Saving...' : 'Save XML'}
+                    </Button>
                   </div>
                 </div>
-                <Textarea
-                  value={template.xml}
-                  onChange={(e) => updatePartnerTemplateXml(template.key, e.target.value)}
-                  className="min-h-56 font-mono text-xs"
-                />
-                <div className="mt-2 flex justify-end">
-                  <Button
-                    size="sm"
-                    onClick={() => savePartnerTemplate(template)}
-                    disabled={templateSavingKey === template.key}
-                  >
-                    {templateSavingKey === template.key ? 'Saving...' : 'Save XML'}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
+        ) : (
+          <div className="text-sm text-gray-500">Template disembunyikan.</div>
         )}
       </Card>
 
@@ -322,6 +366,12 @@ export default function FinancePartnersPage() {
                 <Phone className="h-4 w-4 text-gray-400" />
                 <span>{partner.picWhatsapp || 'WhatsApp not set'}</span>
               </div>
+              <div className="text-xs text-gray-500">
+                READY XML: {partner.waReadyTemplateIsCustom ? 'Custom per partner' : 'Pakai template global'}
+              </div>
+              <div className="text-xs text-gray-500">
+                DONE XML: {partner.waDoneInvoiceTemplateIsCustom ? 'Custom per partner' : 'Pakai template global'}
+              </div>
             </div>
 
             <div className="mt-4 flex items-center gap-2">
@@ -344,7 +394,7 @@ export default function FinancePartnersPage() {
       </div>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="max-w-lg p-4">
+        <DialogContent className="max-w-3xl p-4">
           <DialogHeader>
             <DialogTitle>
               {editingPartner ? 'Edit Partner' : 'Add Partner'}
@@ -397,6 +447,30 @@ export default function FinancePartnersPage() {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Catatan tambahan"
                 />
+              </div>
+              <div className="space-y-1">
+                <Label>WA XML READY Partner (Opsional)</Label>
+                <Textarea
+                  value={formData.waReadyTemplateXml}
+                  onChange={(e) => setFormData({ ...formData, waReadyTemplateXml: e.target.value })}
+                  className="min-h-40 font-mono text-xs"
+                  placeholder="<template>...</template>"
+                />
+                <div className="text-[11px] text-gray-500">
+                  Kosongkan jika ingin pakai template global. Placeholder: {READY_PARTNER_PLACEHOLDERS.map((item) => `{{${item}}}`).join(', ')}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label>WA XML DONE Invoice Partner (Opsional)</Label>
+                <Textarea
+                  value={formData.waDoneInvoiceTemplateXml}
+                  onChange={(e) => setFormData({ ...formData, waDoneInvoiceTemplateXml: e.target.value })}
+                  className="min-h-28 font-mono text-xs"
+                  placeholder="<template>...</template>"
+                />
+                <div className="text-[11px] text-gray-500">
+                  Kosongkan jika ingin pakai template global. Placeholder: {DONE_PARTNER_PLACEHOLDERS.map((item) => `{{${item}}}`).join(', ')}
+                </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <Checkbox

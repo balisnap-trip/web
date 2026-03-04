@@ -155,6 +155,24 @@ export default async function CatalogNewPage({ searchParams }: CatalogNewPagePro
                   defaultValue={100}
                 />
               </FormField>
+              <FormField label="Min Pax (Tier)" htmlFor="catalog-create-starter-min-quantity">
+                <Input
+                  id="catalog-create-starter-min-quantity"
+                  name="starterVariantMinQuantity"
+                  type="number"
+                  min={1}
+                  defaultValue={1}
+                />
+              </FormField>
+              <FormField label="Max Pax (Tier)" htmlFor="catalog-create-starter-max-quantity">
+                <Input
+                  id="catalog-create-starter-max-quantity"
+                  name="starterVariantMaxQuantity"
+                  type="number"
+                  min={1}
+                  placeholder="leave empty for open-ended"
+                />
+              </FormField>
             </div>
           </CardContent>
         </Card>

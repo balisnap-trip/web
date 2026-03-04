@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/db'
+import {
+  loadPatternItemOffsetMap,
+  normalizeOffsetMinutes,
+  savePatternItemOffsetMap,
+} from '@/lib/whatsapp/partner-offsets'
+
+function withOffset<T extends { items: Array<{ id: number; defaultPrice: unknown }> }>(
+  pattern: T,
+  offsetMap: Record<string, number>
+) {
+  return {
+    ...pattern,
+    items: pattern.items.map((item) => ({
+      ...item,
+      defaultPrice: Number(item.defaultPrice),
+      partnerTimeOffsetMinutes: offsetMap[String(item.id)] ?? 0,
+    })),
+  }
+}
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -22,15 +41,10 @@ export async function GET(req: NextRequest) {
         items: { include: { serviceItem: true, defaultPartner: true }, orderBy: { position: 'asc' } },
       },
     })
+    const offsetMap = await loadPatternItemOffsetMap()
 
     return NextResponse.json({
-      patterns: patterns.map((pattern) => ({
-        ...pattern,
-        items: pattern.items.map((item) => ({
-          ...item,
-          defaultPrice: Number(item.defaultPrice),
-        })),
-      })),
+      patterns: patterns.map((pattern) => withOffset(pattern, offsetMap)),
     })
   } catch (error) {
     console.error('[API /finance/patterns] Error:', error)
@@ -87,16 +101,22 @@ export async function POST(req: NextRequest) {
         items: { include: { serviceItem: true, defaultPartner: true }, orderBy: { position: 'asc' } },
       },
     })
+    const offsetMap = await loadPatternItemOffsetMap()
+    const nextOffsetMap: Record<string, number> = { ...offsetMap }
+    pattern.items.forEach((item, index) => {
+      const input = items[index] as { partnerTimeOffsetMinutes?: unknown } | undefined
+      const normalized = normalizeOffsetMinutes(input?.partnerTimeOffsetMinutes)
+      if (normalized === null || normalized === 0) {
+        delete nextOffsetMap[String(item.id)]
+      } else {
+        nextOffsetMap[String(item.id)] = normalized
+      }
+    })
+    await savePatternItemOffsetMap(nextOffsetMap)
 
     return NextResponse.json({
       success: true,
-      pattern: {
-        ...pattern,
-        items: pattern.items.map((item) => ({
-          ...item,
-          defaultPrice: Number(item.defaultPrice),
-        })),
-      },
+      pattern: withOffset(pattern, nextOffsetMap),
     })
   } catch (error) {
     console.error('[API /finance/patterns] Error creating pattern:', error)

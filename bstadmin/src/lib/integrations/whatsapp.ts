@@ -1,34 +1,38 @@
 /**
- * GREEN-API WhatsApp Integration
- * Based on WAUtils.py from bookingautomation
- * 
- * Sends messages to WhatsApp group using GREEN-API
+ * Multi-provider WhatsApp integration.
+ *
+ * Supports:
+ * - GREEN-API
+ * - WAHA (self-hosted)
  */
 
 import { prisma } from '@/lib/db'
-
-export interface WhatsAppConfig {
-  instanceId: string
-  apiToken: string
-  groupChatId: string
-  baseUrl: string
-  defaultCountryCode: string
-}
-
-export interface WhatsAppMessage {
-  chatId: string
-  message: string
-  linkPreview?: boolean
-}
+import {
+  loadWhatsAppProviderSettings,
+  type GreenApiSettings,
+  type WhatsAppProvider,
+  type WhatsAppProviderSettings,
+  type WahaSettings,
+} from '@/lib/whatsapp/provider-settings'
 
 export interface WhatsAppSendOutcome {
   success: boolean
   error: string | null
 }
 
-const DEFAULT_GREENAPI_BASE_URL = 'https://7103.api.greenapi.com'
+interface ProviderRequest {
+  provider: WhatsAppProvider
+  url: string
+  headers: Record<string, string>
+  body: unknown
+  maxAttempts: number
+  requestTimeoutMs: number
+  redactValues: string[]
+}
+
 const RETRYABLE_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 const MAX_ERROR_SNIPPET_LENGTH = 240
+const FALLBACK_COUNTRY_CODE = '62'
 
 function parseEnabledValue(value: unknown): boolean | null {
   if (typeof value === 'boolean') {
@@ -55,54 +59,47 @@ function parseEnabledValue(value: unknown): boolean | null {
   return null
 }
 
-function parseBoundedInt(value: unknown, fallback: number, min: number, max: number): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return fallback
-  const rounded = Math.floor(parsed)
-  if (rounded < min) return min
-  if (rounded > max) return max
-  return rounded
-}
-
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 export class WhatsAppService {
-  private config: WhatsAppConfig
-  private readonly sendMaxAttempts: number
-  private readonly requestTimeoutMs: number
+  private lastKnownDefaultCountryCode = this.resolveInitialDefaultCountryCode()
 
-  constructor(config?: Partial<WhatsAppConfig>) {
-    const baseUrlCandidate = String(
-      config?.baseUrl ?? process.env.GREENAPI_BASE_URL ?? DEFAULT_GREENAPI_BASE_URL
-    )
-      .trim()
-      .replace(/\/+$/, '')
+  private resolveInitialDefaultCountryCode(): string {
+    const candidates = [
+      process.env.WHATSAPP_DEFAULT_COUNTRY_CODE,
+      process.env.WAHA_DEFAULT_COUNTRY_CODE,
+      process.env.GREENAPI_DEFAULT_COUNTRY_CODE,
+      FALLBACK_COUNTRY_CODE,
+    ]
 
-    this.config = {
-      instanceId: config?.instanceId ?? process.env.GREENAPI_INSTANCE_ID ?? '',
-      apiToken: config?.apiToken ?? process.env.GREENAPI_API_TOKEN ?? '',
-      groupChatId: config?.groupChatId ?? process.env.GREENAPI_GROUP_CHAT_ID ?? '',
-      baseUrl: baseUrlCandidate || DEFAULT_GREENAPI_BASE_URL,
-      defaultCountryCode:
-        (config?.defaultCountryCode ?? process.env.GREENAPI_DEFAULT_COUNTRY_CODE ?? '62')
-          .replace(/\D/g, '') || '62',
+    for (const candidate of candidates) {
+      const normalized = String(candidate ?? '').replace(/\D/g, '')
+      if (normalized) {
+        return normalized
+      }
     }
-    this.sendMaxAttempts = parseBoundedInt(process.env.GREENAPI_SEND_MAX_ATTEMPTS, 3, 1, 8)
-    this.requestTimeoutMs = parseBoundedInt(process.env.GREENAPI_REQUEST_TIMEOUT_MS, 20000, 1000, 120000)
+
+    return FALLBACK_COUNTRY_CODE
   }
 
-  private sanitizeErrorDetails(raw: string): string {
+  private sanitizeErrorDetails(raw: string, redactValues: string[] = []): string {
     let value = String(raw || '').trim()
     if (!value) return ''
-    if (this.config.apiToken) {
-      value = value.split(this.config.apiToken).join('***')
+
+    for (const secret of redactValues) {
+      if (secret) {
+        value = value.split(secret).join('***')
+      }
     }
+
     value = value.replace(/waInstance\d+/g, 'waInstance***')
+
     if (value.length > MAX_ERROR_SNIPPET_LENGTH) {
       value = `${value.slice(0, MAX_ERROR_SNIPPET_LENGTH)}...`
     }
+
     return value
   }
 
@@ -114,58 +111,14 @@ export class WhatsAppService {
     return Math.min(5000, 400 * Math.pow(2, Math.max(0, attempt - 1)))
   }
 
-  /**
-   * Send message to WhatsApp group
-   */
-  async sendToGroup(message: string, linkPreview: boolean = true): Promise<boolean> {
-    const outcome = await this.sendToGroupDetailed(message, linkPreview)
-    return outcome.success
-  }
-
-  async sendToGroupDetailed(message: string, linkPreview: boolean = true): Promise<WhatsAppSendOutcome> {
-    if (!this.config.groupChatId) {
-      console.error('[WhatsApp] Missing GREEN-API group chat ID')
-      return { success: false, error: 'Missing GREEN-API group chat ID' }
-    }
-    return this.sendMessage(this.config.groupChatId, message, linkPreview)
-  }
-
-  /**
-   * Send message to explicit chat ID
-   */
-  async sendToChat(chatId: string, message: string, linkPreview: boolean = true): Promise<boolean> {
-    const outcome = await this.sendToChatDetailed(chatId, message, linkPreview)
-    return outcome.success
-  }
-
-  async sendToChatDetailed(chatId: string, message: string, linkPreview: boolean = true): Promise<WhatsAppSendOutcome> {
-    return this.sendMessage(chatId, message, linkPreview)
-  }
-
-  /**
-   * Send message to phone number (converted to @c.us chat ID)
-   */
-  async sendToPhone(phone: string, message: string, linkPreview: boolean = true): Promise<boolean> {
-    const outcome = await this.sendToPhoneDetailed(phone, message, linkPreview)
-    return outcome.success
-  }
-
-  async sendToPhoneDetailed(phone: string, message: string, linkPreview: boolean = true): Promise<WhatsAppSendOutcome> {
-    const chatId = this.toPhoneChatId(phone)
-    if (!chatId) {
-      console.error('[WhatsApp] Invalid phone number:', phone)
-      return { success: false, error: `Invalid phone number: ${String(phone || '').trim()}` }
-    }
-    return this.sendMessage(chatId, message, linkPreview)
-  }
-
-  /**
-   * Normalize phone number to digits only with country code
-   */
-  normalizePhoneNumber(phone: string | null | undefined): string | null {
+  private normalizePhoneNumberWithCountryCode(
+    phone: string | null | undefined,
+    defaultCountryCode: string
+  ): string | null {
     const raw = String(phone ?? '').trim()
     if (!raw) return null
 
+    const countryCode = String(defaultCountryCode || FALLBACK_COUNTRY_CODE).replace(/\D/g, '') || FALLBACK_COUNTRY_CODE
     let digits = raw.replace(/\D/g, '')
     if (!digits) return null
 
@@ -173,28 +126,135 @@ export class WhatsAppService {
       digits = digits.slice(2)
     }
 
-    if (digits.startsWith(this.config.defaultCountryCode)) {
+    if (digits.startsWith(countryCode)) {
       return digits
     }
 
     if (digits.startsWith('0')) {
-      const normalized = `${this.config.defaultCountryCode}${digits.slice(1)}`
-      return normalized.length > this.config.defaultCountryCode.length ? normalized : null
+      const normalized = `${countryCode}${digits.slice(1)}`
+      return normalized.length > countryCode.length ? normalized : null
     }
 
-    if (this.config.defaultCountryCode === '62' && digits.startsWith('8')) {
+    if (countryCode === '62' && digits.startsWith('8')) {
       return `62${digits}`
     }
 
     return digits
   }
 
+  private toPhoneChatIdWithCountryCode(
+    phone: string | null | undefined,
+    defaultCountryCode: string
+  ): string | null {
+    const normalized = this.normalizePhoneNumberWithCountryCode(phone, defaultCountryCode)
+    return normalized ? `${normalized}@c.us` : null
+  }
+
+  private async getRuntimeSettings(): Promise<WhatsAppProviderSettings> {
+    const settings = await loadWhatsAppProviderSettings()
+    this.lastKnownDefaultCountryCode = this.getDefaultCountryCode(settings)
+    return settings
+  }
+
+  private getDefaultCountryCode(settings: WhatsAppProviderSettings): string {
+    const code =
+      settings.provider === 'waha'
+        ? settings.waha.defaultCountryCode
+        : settings.greenApi.defaultCountryCode
+
+    return String(code || FALLBACK_COUNTRY_CODE).replace(/\D/g, '') || FALLBACK_COUNTRY_CODE
+  }
+
+  private getGroupChatId(settings: WhatsAppProviderSettings): string {
+    return settings.provider === 'waha'
+      ? settings.waha.groupChatId
+      : settings.greenApi.groupChatId
+  }
+
+  private providerLabel(provider: WhatsAppProvider): string {
+    return provider === 'waha' ? 'WAHA' : 'GREEN-API'
+  }
+
   /**
-   * Convert phone number into GREEN-API chat ID format
+   * Send message to the configured WhatsApp group.
+   */
+  async sendToGroup(message: string, linkPreview: boolean = true): Promise<boolean> {
+    const outcome = await this.sendToGroupDetailed(message, linkPreview)
+    return outcome.success
+  }
+
+  async sendToGroupDetailed(
+    message: string,
+    linkPreview: boolean = true
+  ): Promise<WhatsAppSendOutcome> {
+    const settings = await this.getRuntimeSettings()
+    const chatId = this.getGroupChatId(settings)
+
+    if (!chatId) {
+      const label = this.providerLabel(settings.provider)
+      console.error(`[WhatsApp] Missing ${label} group chat ID`)
+      return { success: false, error: `Missing ${label} group chat ID` }
+    }
+
+    return this.sendMessage(settings, chatId, message, linkPreview)
+  }
+
+  /**
+   * Send message to an explicit chat ID.
+   */
+  async sendToChat(chatId: string, message: string, linkPreview: boolean = true): Promise<boolean> {
+    const outcome = await this.sendToChatDetailed(chatId, message, linkPreview)
+    return outcome.success
+  }
+
+  async sendToChatDetailed(
+    chatId: string,
+    message: string,
+    linkPreview: boolean = true
+  ): Promise<WhatsAppSendOutcome> {
+    const settings = await this.getRuntimeSettings()
+    return this.sendMessage(settings, chatId, message, linkPreview)
+  }
+
+  /**
+   * Send message to phone number (converted to @c.us chat ID).
+   */
+  async sendToPhone(phone: string, message: string, linkPreview: boolean = true): Promise<boolean> {
+    const outcome = await this.sendToPhoneDetailed(phone, message, linkPreview)
+    return outcome.success
+  }
+
+  async sendToPhoneDetailed(
+    phone: string,
+    message: string,
+    linkPreview: boolean = true
+  ): Promise<WhatsAppSendOutcome> {
+    const settings = await this.getRuntimeSettings()
+    const chatId = this.toPhoneChatIdWithCountryCode(phone, this.getDefaultCountryCode(settings))
+
+    if (!chatId) {
+      console.error('[WhatsApp] Invalid phone number:', phone)
+      return { success: false, error: `Invalid phone number: ${String(phone || '').trim()}` }
+    }
+
+    return this.sendMessage(settings, chatId, message, linkPreview)
+  }
+
+  /**
+   * Normalize phone number to digits only with country code.
+   *
+   * This stays synchronous because the booking draft builder depends on it.
+   * It uses the last resolved provider country code and falls back to env/defaults.
+   */
+  normalizePhoneNumber(phone: string | null | undefined): string | null {
+    return this.normalizePhoneNumberWithCountryCode(phone, this.lastKnownDefaultCountryCode)
+  }
+
+  /**
+   * Convert phone number into chat ID format.
    */
   toPhoneChatId(phone: string | null | undefined): string | null {
-    const normalized = this.normalizePhoneNumber(phone)
-    return normalized ? `${normalized}@c.us` : null
+    return this.toPhoneChatIdWithCountryCode(phone, this.lastKnownDefaultCountryCode)
   }
 
   async isEnabled(): Promise<boolean> {
@@ -215,10 +275,16 @@ export class WhatsAppService {
     } catch {
       console.warn('[WhatsApp] Failed to read system setting, using env fallback')
     }
+
     return enabled
   }
 
-  private async sendMessage(chatId: string, message: string, linkPreview: boolean): Promise<WhatsAppSendOutcome> {
+  private async sendMessage(
+    settings: WhatsAppProviderSettings,
+    chatId: string,
+    message: string,
+    linkPreview: boolean
+  ): Promise<WhatsAppSendOutcome> {
     if (!chatId) {
       console.error('[WhatsApp] Missing chat ID')
       return { success: false, error: 'Missing chat ID' }
@@ -235,44 +301,101 @@ export class WhatsAppService {
       return { success: false, error: 'WhatsApp disabled by system setting' }
     }
 
-    if (!this.config.instanceId || !this.config.apiToken) {
+    if (settings.provider === 'waha') {
+      return this.sendViaWaha(settings.waha, chatId, message, linkPreview)
+    }
+
+    return this.sendViaGreenApi(settings.greenApi, chatId, message, linkPreview)
+  }
+
+  private async sendViaGreenApi(
+    config: GreenApiSettings,
+    chatId: string,
+    message: string,
+    linkPreview: boolean
+  ): Promise<WhatsAppSendOutcome> {
+    if (!config.instanceId || !config.apiToken) {
       console.error('[WhatsApp] Missing GREEN-API credentials')
       return { success: false, error: 'Missing GREEN-API credentials' }
     }
 
-    const url = `${this.config.baseUrl}/waInstance${this.config.instanceId}/sendMessage/${this.config.apiToken}`
+    return this.performRequest({
+      provider: 'green_api',
+      url: `${config.baseUrl}/waInstance${config.instanceId}/sendMessage/${config.apiToken}`,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: {
+        chatId,
+        message,
+        linkPreview,
+      },
+      maxAttempts: config.sendMaxAttempts,
+      requestTimeoutMs: config.requestTimeoutMs,
+      redactValues: [config.apiToken],
+    })
+  }
 
-    const payload: WhatsAppMessage = {
-      chatId,
-      message,
-      linkPreview,
+  private async sendViaWaha(
+    config: WahaSettings,
+    chatId: string,
+    message: string,
+    linkPreview: boolean
+  ): Promise<WhatsAppSendOutcome> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
     }
 
-    for (let attempt = 1; attempt <= this.sendMaxAttempts; attempt += 1) {
+    if (config.apiKey) {
+      headers['X-Api-Key'] = config.apiKey
+    }
+
+    return this.performRequest({
+      provider: 'waha',
+      url: `${config.baseUrl}/api/sendText`,
+      headers,
+      body: {
+        session: config.session,
+        chatId,
+        text: message,
+        linkPreview,
+      },
+      maxAttempts: config.sendMaxAttempts,
+      requestTimeoutMs: config.requestTimeoutMs,
+      redactValues: [config.apiKey],
+    })
+  }
+
+  private async performRequest(request: ProviderRequest): Promise<WhatsAppSendOutcome> {
+    const label = this.providerLabel(request.provider)
+
+    for (let attempt = 1; attempt <= request.maxAttempts; attempt += 1) {
       const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs)
+      const timeout = setTimeout(() => controller.abort(), request.requestTimeoutMs)
 
       try {
-        const response = await fetch(url, {
+        const response = await fetch(request.url, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload),
+          headers: request.headers,
+          body: JSON.stringify(request.body),
           signal: controller.signal,
         })
         clearTimeout(timeout)
 
         if (!response.ok) {
-          const errorText = this.sanitizeErrorDetails(await response.text())
+          const errorText = this.sanitizeErrorDetails(
+            await response.text(),
+            request.redactValues
+          )
           const lastError = errorText ? `HTTP ${response.status} - ${errorText}` : `HTTP ${response.status}`
+
           console.error(
-            `[WhatsApp] API Error (attempt ${attempt}/${this.sendMaxAttempts}):`,
+            `[WhatsApp] ${label} API Error (attempt ${attempt}/${request.maxAttempts}):`,
             response.status,
             errorText || '<empty>'
           )
 
-          if (attempt < this.sendMaxAttempts && this.shouldRetry(response.status)) {
+          if (attempt < request.maxAttempts && this.shouldRetry(response.status)) {
             await wait(this.retryDelayMs(attempt))
             continue
           }
@@ -281,25 +404,27 @@ export class WhatsAppService {
         }
 
         const result = await response.json().catch(() => null)
-        console.log('[WhatsApp] Message sent successfully:', result ?? { ok: true })
+        console.log(`[WhatsApp] ${label} message sent successfully:`, result ?? { ok: true })
         return { success: true, error: null }
       } catch (error) {
         clearTimeout(timeout)
+
         const errName = error instanceof Error ? error.name : ''
         const rawMessage =
           errName === 'AbortError'
-            ? `Request timeout after ${this.requestTimeoutMs}ms`
+            ? `Request timeout after ${request.requestTimeoutMs}ms`
             : error instanceof Error
             ? error.message
-              : String(error)
-        const sanitized = this.sanitizeErrorDetails(rawMessage)
+            : String(error)
+        const sanitized = this.sanitizeErrorDetails(rawMessage, request.redactValues)
         const lastError = sanitized || 'Unknown request error'
+
         console.error(
-          `[WhatsApp] Error sending message (attempt ${attempt}/${this.sendMaxAttempts}):`,
+          `[WhatsApp] ${label} error sending message (attempt ${attempt}/${request.maxAttempts}):`,
           sanitized || error
         )
 
-        if (attempt < this.sendMaxAttempts) {
+        if (attempt < request.maxAttempts) {
           await wait(this.retryDelayMs(attempt))
           continue
         }
@@ -312,8 +437,7 @@ export class WhatsAppService {
   }
 
   /**
-   * Format booking notification message
-   * Based on message formatting in Python scripts
+   * Format booking notification message.
    */
   formatBookingMessage(booking: {
     source: string
@@ -333,12 +457,10 @@ export class WhatsAppService {
   }): string {
     const lines: string[] = []
 
-    // Header with source and booking ref
     lines.push(`*📧 New Booking - ${booking.source}*`)
     lines.push(`*Booking Ref:* ${booking.bookingRef}`)
     lines.push('')
 
-    // Tour details
     lines.push(`*Tour:* ${booking.tourName}`)
     lines.push(`*Date:* ${this.formatDate(booking.tourDate)}`)
     if (booking.tourTime) {
@@ -346,7 +468,6 @@ export class WhatsAppService {
     }
     lines.push('')
 
-    // Customer details
     lines.push(`*Customer:* ${booking.mainContactName}`)
     lines.push(`*Email:* ${booking.mainContactEmail}`)
     if (booking.phoneNumber) {
@@ -354,7 +475,6 @@ export class WhatsAppService {
     }
     lines.push('')
 
-    // Pax and pricing
     const paxParts: string[] = []
     if (booking.numberOfAdult > 0) {
       paxParts.push(`${booking.numberOfAdult} Adult${booking.numberOfAdult > 1 ? 's' : ''}`)
@@ -363,19 +483,17 @@ export class WhatsAppService {
       paxParts.push(`${booking.numberOfChild} Child${booking.numberOfChild > 1 ? 'ren' : ''}`)
     }
     lines.push(`*Pax:* ${paxParts.join(', ')}`)
-    
+
     if (booking.totalPrice > 0) {
       lines.push(`*Price:* ${this.formatCurrency(booking.totalPrice, booking.currency)}`)
     }
     lines.push('')
 
-    // Meeting point
     if (booking.meetingPoint) {
       lines.push(`*Meeting Point:* ${booking.meetingPoint}`)
       lines.push('')
     }
 
-    // Additional notes
     if (booking.note) {
       lines.push(`*Note:* ${booking.note}`)
     }
@@ -384,7 +502,7 @@ export class WhatsAppService {
   }
 
   /**
-   * Format cancellation message
+   * Format cancellation message.
    */
   formatCancellationMessage(bookingRef: string, tourName: string, source: string): string {
     return [
@@ -397,7 +515,7 @@ export class WhatsAppService {
   }
 
   /**
-   * Format update/modification message
+   * Format update/modification message.
    */
   formatUpdateMessage(bookingRef: string, tourName: string, source: string): string {
     return [
@@ -432,21 +550,23 @@ export class WhatsAppService {
       return `${symbol} ${amount.toLocaleString('id-ID', { maximumFractionDigits: 0 })}`
     }
 
-    return `${symbol}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    return `${symbol}${amount.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`
   }
 }
 
-// Singleton instance
 let whatsappService: WhatsAppService | null = null
 
 export function getWhatsAppService(): WhatsAppService {
   if (!whatsappService) {
     whatsappService = new WhatsAppService()
   }
+
   return whatsappService
 }
 
-// Convenience function
 export async function sendWhatsAppToGroup(message: string): Promise<boolean> {
   const service = getWhatsAppService()
   return service.sendToGroup(message)
