@@ -1,8 +1,9 @@
-// pages/404.tsx
+'use client'
+
 import React from 'react'
-import Link from 'next/link'
-import { LoginForm } from '@/components/Auth'
 import { usePathname } from 'next/navigation'
+
+import { LoginForm } from '@/components/Auth'
 
 const UnAuthorized = () => {
   const path = usePathname()

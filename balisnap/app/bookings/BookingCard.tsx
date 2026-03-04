@@ -1,3 +1,5 @@
+'use client'
+
 import { Button, Chip, Spinner, Textarea } from '@heroui/react'
 import { useState } from 'react'
 import { FaStar } from 'react-icons/fa6'
