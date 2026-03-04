@@ -1,24 +1,16 @@
-'use client'
-import { useEffect, useState } from 'react'
+import { TourPackages } from '@/components/TourPackages'
+import { getFeaturedTours } from '@/lib/public-data'
 
-import { fetchFeaturedTours, TourPackages } from '@/components/TourPackages'
-export default function ToursPage() {
-  const [tours, setTours] = useState<any[]>([])
+export const dynamic = 'force-dynamic'
 
-  useEffect(() => {
-    // Define an async function and call it
-    const fetchTourData = async () => {
-      try {
-        const data = await fetchFeaturedTours()
+export default async function ToursPage() {
+  let tours: Awaited<ReturnType<typeof getFeaturedTours>> = []
 
-        setTours(data)
-      } catch (error) {
-        console.log(error)
-      }
-    }
-
-    fetchTourData()
-  }, [])
+  try {
+    tours = await getFeaturedTours()
+  } catch (error) {
+    console.error('Failed to load featured tours for /tours', error)
+  }
 
   return (
     <div className="max-w-[80rem] mx-auto p-4">

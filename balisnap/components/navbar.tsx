@@ -26,7 +26,7 @@ import { signOut, useSession } from 'next-auth/react'
 import { siteConfig } from '@/config/site'
 import { Logo } from '@/components/icons'
 
-const Navbar = ({ showReviews }: { showReviews: boolean }) => {
+const Navbar = ({ showReviews = true }: { showReviews?: boolean }) => {
   const [isMenuOpen, setIsMenuOpen] = useReducer((current) => !current, false)
   const isSmallScreen = useMediaQuery({ query: '(max-width: 768px)' })
   const { data: sessionData } = useSession()

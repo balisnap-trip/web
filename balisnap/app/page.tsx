@@ -1,42 +1,22 @@
-'use client'
-import { useEffect, useState } from 'react'
 import Script from 'next/script'
 
-import { fetchFeaturedTours, TourPackages } from '@/components/TourPackages'
+import { TourPackages } from '@/components/TourPackages'
 import { Reviews } from '@/components/Reviews'
 import HeroSection from '@/components/hero'
-import { fetchReviews } from '@/components/Reviews/fetchData'
 import ChooseUs from '@/components/ChooseUs'
 import HappyCustomer from '@/components/HappyCustomer'
+import { getFeaturedTours, getLatestReviews } from '@/lib/public-data'
 
-export default function Home() {
-  const [reviews, setReviews] = useState<any[]>([])
-  const [tours, setTours] = useState<any[]>([])
+export const dynamic = 'force-dynamic'
 
-  useEffect(() => {
-    // Define an async function and call it
-    const fetchTourData = async () => {
-      try {
-        const data = await fetchFeaturedTours()
-
-        setTours(data)
-      } catch (error) {
-        console.log(error)
-      }
-    }
-    const fetchReviewData = async () => {
-      try {
-        const data = await fetchReviews()
-
-        setReviews(data)
-      } catch (error) {
-        console.log(error)
-      }
-    }
-
-    fetchTourData()
-    fetchReviewData() // Call the async function
-  }, [])
+export default async function Home() {
+  const [toursResult, reviewsResult] = await Promise.allSettled([
+    getFeaturedTours(),
+    getLatestReviews()
+  ])
+  const tours = toursResult.status === 'fulfilled' ? toursResult.value : []
+  const reviews =
+    reviewsResult.status === 'fulfilled' ? reviewsResult.value : []
 
   return (
     <>

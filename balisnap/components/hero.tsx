@@ -1,6 +1,4 @@
-'use client'
 import Image from 'next/image'
-import { Link } from 'react-scroll'
 
 import heroImage from '../public/hero.jpg'
 
@@ -33,12 +31,12 @@ const HeroSection = () => {
             immersive tours that connect you with the heart of the island. Your
             adventure starts here.
           </p>
-          <Link
+          <a
             className="animate-pulse py-1 px-4 text-white border-white border-1 rounded-xl text-base cursor-pointer"
-            to="tour-packages"
+            href="#tour-packages"
           >
             Discover More
-          </Link>
+          </a>
         </div>
 
       </div>

@@ -1,6 +1,7 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
   siteUrl: process.env.NEXT_PUBLIC_BASE_URL,
+  autoLastmod: false,
   generateRobotsTxt: true,
   robotsTxtOptions: {
     policies: [
@@ -12,7 +13,7 @@ module.exports = {
     ]
   },
   sitemapSize: 7000,
-  exclude: ['/api/*'],
+  exclude: ['/api/*', '/auth/*', '/bookings', '/booking/*'],
   additionalPaths: async (config) => {
     const result = []
 
@@ -43,7 +44,6 @@ module.exports = {
         }
 
         const data = await res.json()
-        console.log(data)
         return data
       } catch (error) {
         return [] // Return empty array on error

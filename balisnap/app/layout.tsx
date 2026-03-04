@@ -8,7 +8,6 @@ import { siteConfig } from '@/config/site'
 import { fontSans } from '@/config/fonts'
 import Navbar from '@/components/navbar'
 import Footer from '@/components/Footer'
-import { fetchReviews } from '@/components/Reviews/fetchData'
 
 export const metadata: Metadata = {
   title: {
@@ -57,21 +56,11 @@ export const viewport: Viewport = {
   ]
 }
 
-export default async function RootLayout({
+export default function RootLayout({
   children
 }: {
   children: React.ReactNode
 }) {
-  let reviews = []
-
-  try {
-    reviews = await fetchReviews()
-  } catch (error) {
-    console.log(error)
-  }
-
-  const showReviews = reviews.length > 0
-
   return (
     <html suppressHydrationWarning lang="en">
       <head>
@@ -97,19 +86,17 @@ export default async function RootLayout({
       >
         {/* Google Tag Manager (noscript) */}
         <noscript>
-          <noscript>
-            <iframe
-              height="0"
-              src="https://www.googletagmanager.com/ns.html?id=GTM-K23JXSCZ"
-              style={{ display: 'none', visibility: 'hidden' }}
-              title="Google Tag Manager"
-              width="0"
-            />
-          </noscript>
+          <iframe
+            height="0"
+            src="https://www.googletagmanager.com/ns.html?id=GTM-K23JXSCZ"
+            style={{ display: 'none', visibility: 'hidden' }}
+            title="Google Tag Manager"
+            width="0"
+          />
         </noscript>
         <Providers themeProps={{ attribute: 'class', defaultTheme: 'light' }}>
           <div className="relative flex flex-col h-screen">
-            <Navbar showReviews={showReviews} />
+            <Navbar />
             <main className="flex-grow px-0 py-0 w-full">{children}</main>
             <Footer />
           </div>

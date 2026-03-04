@@ -1,5 +1,4 @@
-'use client'
-import { Image } from '@heroui/react'
+import Image from 'next/image'
 
 import { title } from '@/components/primitives'
 
@@ -100,7 +99,9 @@ export default function AboutPage() {
         <Image
           alt={'Bali'}
           className="object-cover w-full rounded-md"
+          height={960}
           src={'/tours/bali.jpg'}
+          width={1600}
         />
       </div>
     </div>

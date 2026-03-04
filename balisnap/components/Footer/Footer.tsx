@@ -1,4 +1,3 @@
-'use client'
 import { FaFacebookF, FaInstagram, FaTripadvisor } from 'react-icons/fa'
 import { FaXTwitter } from 'react-icons/fa6'
 
@@ -16,7 +15,6 @@ const Footer = () => {
       <div className="pt-10 h-80 pb-32 relative flex items-center justify-center overflow-hidden">
         <Image
           fill
-          priority
           alt="Hero Image"
           quality={100}
           src={heroImage}
