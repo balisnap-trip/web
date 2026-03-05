@@ -3,10 +3,13 @@ import { PHASE_DEVELOPMENT_SERVER } from 'next/constants.js'
 
 const require = createRequire(import.meta.url)
 const pkg = require('./package.json')
+const isWindows = process.platform === 'win32'
+const forceStandalone = process.env.NEXT_FORCE_STANDALONE === '1'
 
 /** @type {import('next').NextConfig} */
 const baseConfig = {
-  output: 'standalone', // For Docker deployment
+  // Keep standalone for Linux/Docker, but avoid Windows symlink issues during local builds.
+  output: forceStandalone || !isWindows ? 'standalone' : undefined,
   serverExternalPackages: ['imapflow', '@zone-eu/mailsplit', 'iconv-lite', 'libmime', 'mailparser', 'nodemailer', 'socks', 'smart-buffer'],
   experimental: {
     serverActions: {
