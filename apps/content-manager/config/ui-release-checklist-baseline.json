@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-05T03:11:36.182Z",
+  "note": "CM UI release checklist baseline",
+  "trackedFiles": [
+    {
+      "path": "src/app/(panel)/dashboard/page.tsx",
+      "exists": true,
+      "sha256": "3e71e8cde8efd80b794a601fd56a86461d6e8ebaf3e446afbf3a562b16dea34f"
+    },
+    {
+      "path": "src/app/(panel)/catalog/page.tsx",
+      "exists": true,
+      "sha256": "99282637d73e5b14a1eb78bca42265510d7cd1858530a55a34368a87a7c2c9cb"
+    },
+    {
+      "path": "src/app/(panel)/publish/page.tsx",
+      "exists": true,
+      "sha256": "0dd954a8a203a876f39a7678aa2c4c4edb5b43096535caeb151f4458243fee4f"
+    },
+    {
+      "path": "src/components/layout/cm-header.tsx",
+      "exists": true,
+      "sha256": "aac494fb8d4f9f9ccf610689e4563b81a87a8ce73fb267439436c9828f57a814"
+    },
+    {
+      "path": "src/components/layout/cm-shell.tsx",
+      "exists": true,
+      "sha256": "a03c1d4719a12e8d2b75f666c0885ea783647c144d9be3f78af94cd82099d70b"
+    },
+    {
+      "path": "src/components/catalog/catalog-item-delete-modal.tsx",
+      "exists": true,
+      "sha256": "8b9f5407e59a6d98ed59e26f9c3a29951dd73041a8097e8111ebbc8f22a3971b"
+    },
+    {
+      "path": "src/components/catalog/image-preview-modal.tsx",
+      "exists": true,
+      "sha256": "88fd3054da96c946055e90058d442ee74bccce1415d3002b23f30371a7bac3ea"
+    },
+    {
+      "path": "src/components/ui/form-field.tsx",
+      "exists": true,
+      "sha256": "8c34cd5891f7ea3002a3e34f3c49361f1446c04492e18d5517bad5c98609b8d9"
+    },
+    {
+      "path": "src/components/ui/table.tsx",
+      "exists": true,
+      "sha256": "2df4f4bdd76f62ee4cdcdec10498bf0a5e641baf3ab00d55992a8d6e39aa2e8c"
+    },
+    {
+      "path": "src/components/ui/status-badge.tsx",
+      "exists": true,
+      "sha256": "e168cd1e157bb8858a904f3a8f3de09054e45f8a3df3c81275b54a84905a16a1"
+    },
+    {
+      "path": "src/components/ui/dialog.tsx",
+      "exists": true,
+      "sha256": "1917312db7958dc3536d614bc4aaf5df3842f135ab176582aee9c69238bc5428"
+    },
+    {
+      "path": "src/components/ui/sheet.tsx",
+      "exists": true,
+      "sha256": "6700d00071a7848698aeef41df12ce92cadccdb77c3d960ad1e9769ddc6a465d"
+    },
+    {
+      "path": "src/components/ui/popover.tsx",
+      "exists": true,
+      "sha256": "f3cff32d31af32c48c5a4d7d8ac4de1db97aa31d636a44d5a3cf999fac055cca"
+    }
+  ]
+}
