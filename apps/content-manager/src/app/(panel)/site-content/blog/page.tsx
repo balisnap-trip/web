@@ -8,10 +8,20 @@ import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { DataTableShell, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  DataTableShell,
+  Table,
+  TableBody,
+  TableCell,
+  TableEmpty,
+  TableHead,
+  TableHeader,
+  TableRow
+} from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { authOptions } from "@/lib/auth";
 import { isAllowedRole } from "@/lib/roles";
+import { saveSiteContentDraftAction, submitSiteContentReviewAction } from "../actions";
 
 const posts = [
   {
@@ -60,11 +70,39 @@ function formatDateTime(value: string) {
   });
 }
 
-export default async function SiteContentBlogPage() {
+interface SiteContentBlogPageProps {
+  searchParams?: Promise<{
+    q?: string;
+    status?: string;
+    result?: string;
+    error?: string;
+  }>;
+}
+
+export default async function SiteContentBlogPage({ searchParams }: SiteContentBlogPageProps) {
   const session = await getServerSession(authOptions);
   if (!session?.user || !isAllowedRole(session.user.role)) {
     redirect("/login");
   }
+
+  const resolvedSearchParams = (await searchParams) || {};
+  const rawQuery = resolvedSearchParams.q || "";
+  const normalizedQuery = rawQuery.trim().toLowerCase();
+  const statusFilter = (resolvedSearchParams.status || "ALL").trim().toUpperCase();
+  const normalizedStatusFilter =
+    statusFilter === "ALL" || statusFilter === "DRAFT" || statusFilter === "IN_REVIEW" || statusFilter === "PUBLISHED"
+      ? statusFilter
+      : "ALL";
+
+  const filteredPosts = posts.filter((post) => {
+    const matchStatus = normalizedStatusFilter === "ALL" || post.status === normalizedStatusFilter;
+    const matchQuery =
+      !normalizedQuery ||
+      post.title.toLowerCase().includes(normalizedQuery) ||
+      post.slug.toLowerCase().includes(normalizedQuery) ||
+      post.id.toLowerCase().includes(normalizedQuery);
+    return matchStatus && matchQuery;
+  });
 
   return (
     <section className="space-y-6">
@@ -84,13 +122,30 @@ export default async function SiteContentBlogPage() {
               <Button asChild variant="outline" size="sm">
                 <Link href="/site-content">Back to overview</Link>
               </Button>
-              <Button type="button" size="sm">
-                Save draft (UI)
-              </Button>
+              <form action={saveSiteContentDraftAction}>
+                <input type="hidden" name="scope" value="blog" />
+                <Button type="submit" size="sm">
+                  Save draft
+                </Button>
+              </form>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {resolvedSearchParams.result ? (
+        <Card className="border-emerald-200 bg-emerald-50/80">
+          <CardContent className="pt-6 text-sm text-emerald-700">
+            Result: {resolvedSearchParams.result}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {resolvedSearchParams.error ? (
+        <Card className="border-red-200 bg-red-50/80">
+          <CardContent className="pt-6 text-sm text-red-700">Error: {resolvedSearchParams.error}</CardContent>
+        </Card>
+      ) : null}
 
       <SiteContentTabs />
 
@@ -102,21 +157,24 @@ export default async function SiteContentBlogPage() {
               <CardDescription>List of articles and editorial process status.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <form className="grid gap-3 md:grid-cols-4">
+              <form className="grid gap-3 md:grid-cols-4" method="get">
                 <FormField className="md:col-span-2" label="Search post" htmlFor="blog-search">
-                  <Input id="blog-search" placeholder="Search title or slug" />
+                  <Input id="blog-search" name="q" defaultValue={rawQuery} placeholder="Search title or slug" />
                 </FormField>
                 <FormField label="Status" htmlFor="blog-status">
-                  <Select id="blog-status" defaultValue="ALL">
+                  <Select id="blog-status" name="status" defaultValue={normalizedStatusFilter}>
                     <option value="ALL">ALL</option>
                     <option value="DRAFT">DRAFT</option>
                     <option value="IN_REVIEW">IN_REVIEW</option>
                     <option value="PUBLISHED">PUBLISHED</option>
                   </Select>
                 </FormField>
-                <div className="flex items-end">
-                  <Button type="button" variant="outline" className="w-full">
+                <div className="flex items-end gap-2">
+                  <Button type="submit" variant="outline" className="w-full">
                     Apply
+                  </Button>
+                  <Button asChild variant="ghost" className="shrink-0">
+                    <Link href="/site-content/blog">Reset</Link>
                   </Button>
                 </div>
               </form>
@@ -133,25 +191,33 @@ export default async function SiteContentBlogPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {posts.map((post) => (
-                      <TableRow key={post.id} className="hover:bg-slate-50/80">
-                        <TableCell>
-                          <div className="space-y-1">
-                            <p className="font-medium text-slate-900">{post.title}</p>
-                            <p className="text-xs text-slate-500">{post.id}</p>
-                          </div>
+                    {filteredPosts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-6">
+                          <TableEmpty>No blog entries match this filter.</TableEmpty>
                         </TableCell>
-                        <TableCell className="font-mono text-xs text-slate-600">{post.slug}</TableCell>
-                        <TableCell>
-                          <StatusBadge
-                            label={post.status}
-                            tone={statusTone[post.status as keyof typeof statusTone]}
-                          />
-                        </TableCell>
-                        <TableCell className="text-sm text-slate-700">{post.author}</TableCell>
-                        <TableCell className="text-xs text-slate-600">{formatDateTime(post.updatedAt)}</TableCell>
                       </TableRow>
-                    ))}
+                    ) : (
+                      filteredPosts.map((post) => (
+                        <TableRow key={post.id} className="hover:bg-slate-50/80">
+                          <TableCell>
+                            <div className="space-y-1">
+                              <p className="font-medium text-slate-900">{post.title}</p>
+                              <p className="text-xs text-slate-500">{post.id}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-slate-600">{post.slug}</TableCell>
+                          <TableCell>
+                            <StatusBadge
+                              label={post.status}
+                              tone={statusTone[post.status as keyof typeof statusTone]}
+                            />
+                          </TableCell>
+                          <TableCell className="text-sm text-slate-700">{post.author}</TableCell>
+                          <TableCell className="text-xs text-slate-600">{formatDateTime(post.updatedAt)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </DataTableShell>
@@ -193,10 +259,16 @@ export default async function SiteContentBlogPage() {
                 />
               </FormField>
               <div className="grid gap-3 md:grid-cols-2">
-                <Button type="button" variant="outline">
-                  Submit for review
-                </Button>
-                <Button type="button">Save draft</Button>
+                <form action={submitSiteContentReviewAction}>
+                  <input type="hidden" name="scope" value="blog" />
+                  <Button type="submit" variant="outline" className="w-full">
+                    Submit for review
+                  </Button>
+                </form>
+                <form action={saveSiteContentDraftAction}>
+                  <input type="hidden" name="scope" value="blog" />
+                  <Button type="submit" className="w-full">Save draft</Button>
+                </form>
               </div>
             </CardContent>
           </Card>

@@ -231,7 +231,7 @@ export default async function PublishPage({ searchParams }: PublishPageProps) {
                 <Button type="submit" variant="outline">
                   Apply filter
                 </Button>
-                <Button asChild type="button" variant="ghost">
+                <Button asChild variant="ghost">
                   <Link href="/publish">Reset</Link>
                 </Button>
               </div>

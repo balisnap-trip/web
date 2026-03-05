@@ -179,7 +179,7 @@ export default async function CatalogNewPage({ searchParams }: CatalogNewPagePro
 
         <div className="flex flex-wrap items-center gap-2">
           <FormSubmitButton idleLabel="Create item" pendingLabel="Creating item..." />
-          <Button asChild variant="ghost" type="button">
+          <Button asChild variant="ghost">
             <Link href="/catalog">Cancel</Link>
           </Button>
         </div>

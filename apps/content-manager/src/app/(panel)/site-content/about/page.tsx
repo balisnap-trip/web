@@ -10,12 +10,22 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { authOptions } from "@/lib/auth";
 import { isAllowedRole } from "@/lib/roles";
+import { saveSiteContentDraftAction } from "../actions";
 
-export default async function SiteContentAboutPage() {
+interface SiteContentAboutPageProps {
+  searchParams?: Promise<{
+    result?: string;
+    error?: string;
+  }>;
+}
+
+export default async function SiteContentAboutPage({ searchParams }: SiteContentAboutPageProps) {
   const session = await getServerSession(authOptions);
   if (!session?.user || !isAllowedRole(session.user.role)) {
     redirect("/login");
   }
+
+  const resolvedSearchParams = (await searchParams) || {};
 
   return (
     <section className="space-y-6">
@@ -35,13 +45,30 @@ export default async function SiteContentAboutPage() {
               <Button asChild variant="outline" size="sm">
                 <Link href="/site-content">Back to overview</Link>
               </Button>
-              <Button type="button" size="sm">
-                Save draft (UI)
-              </Button>
+              <form action={saveSiteContentDraftAction}>
+                <input type="hidden" name="scope" value="about" />
+                <Button type="submit" size="sm">
+                  Save draft
+                </Button>
+              </form>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {resolvedSearchParams.result ? (
+        <Card className="border-emerald-200 bg-emerald-50/80">
+          <CardContent className="pt-6 text-sm text-emerald-700">
+            Result: {resolvedSearchParams.result}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {resolvedSearchParams.error ? (
+        <Card className="border-red-200 bg-red-50/80">
+          <CardContent className="pt-6 text-sm text-red-700">Error: {resolvedSearchParams.error}</CardContent>
+        </Card>
+      ) : null}
 
       <SiteContentTabs />
 

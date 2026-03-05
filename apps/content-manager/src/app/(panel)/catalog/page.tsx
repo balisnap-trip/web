@@ -97,9 +97,15 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Button asChild size="sm" disabled={!canEdit}>
-                <Link href="/catalog/new">New item</Link>
-              </Button>
+              {canEdit ? (
+                <Button asChild size="sm">
+                  <Link href="/catalog/new">New item</Link>
+                </Button>
+              ) : (
+                <Button size="sm" disabled title="Your role is read-only for catalog">
+                  New item
+                </Button>
+              )}
               <Button asChild size="sm" variant="outline">
                 <Link href="/publish">Publish workflow</Link>
               </Button>
@@ -186,7 +192,7 @@ export default async function CatalogPage({ searchParams }: CatalogPageProps) {
             </FormField>
             <div className="md:col-span-4 flex flex-wrap items-center gap-2">
               <Button type="submit">Apply filter</Button>
-              <Button asChild type="button" variant="ghost">
+              <Button asChild variant="ghost">
                 <Link href="/catalog">Reset</Link>
               </Button>
             </div>
