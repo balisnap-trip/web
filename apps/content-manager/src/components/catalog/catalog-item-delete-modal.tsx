@@ -1,8 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FormSubmitButton } from "@/components/catalog/form-submit-button";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 
 interface CatalogItemDeleteModalProps {
   itemId: string;
@@ -14,66 +23,37 @@ interface CatalogItemDeleteModalProps {
 export function CatalogItemDeleteModal({ itemId, itemName, canEdit, action }: CatalogItemDeleteModalProps) {
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setOpen(false);
-      }
-    };
-
-    document.body.style.overflow = "hidden";
-    window.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
   return (
-    <>
-      <Button type="button" variant="destructive" size="sm" disabled={!canEdit} onClick={() => setOpen(true)}>
-        Delete item
-      </Button>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button" variant="destructive" size="sm" disabled={!canEdit}>
+          Delete item
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md border-red-200 p-5">
+        <DialogHeader>
+          <DialogTitle>Delete catalog item?</DialogTitle>
+          <DialogDescription>
+            You are about to delete <span className="font-semibold text-foreground">{itemName || "this item"}</span>.
+            This action deactivates the item and removes it from active catalog views.
+          </DialogDescription>
+        </DialogHeader>
 
-      {open ? (
-        <div
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl border border-red-200 bg-white p-5 shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-slate-900">Delete catalog item?</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              You are about to delete <span className="font-semibold text-slate-900">{itemName || "this item"}</span>.
-              This action deactivates the item and removes it from active catalog views.
-            </p>
-
-            <form action={action} className="mt-5 flex items-center justify-end gap-2">
-              <input type="hidden" name="itemId" value={itemId} />
-              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <FormSubmitButton
-                idleLabel="Delete item"
-                pendingLabel="Deleting..."
-                variant="destructive"
-                disabled={!canEdit}
-              />
-            </form>
-          </div>
-        </div>
-      ) : null}
-    </>
+        <form action={action}>
+          <input type="hidden" name="itemId" value={itemId} />
+          <DialogFooter className="mt-5 flex gap-2 sm:gap-2">
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <FormSubmitButton
+              idleLabel="Delete item"
+              pendingLabel="Deleting..."
+              variant="destructive"
+              disabled={!canEdit}
+            />
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
-
