@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-02-21T13:13:43.096Z",
+  "generatedAt": "2026-03-05T06:01:08.895Z",
   "note": "EP-013 UI release checklist freeze baseline",
   "criticalFiles": [
     {
@@ -13,7 +13,7 @@
     },
     {
       "path": "src/app/(dashboard)/bookings/[id]/page.tsx",
-      "sha256": "64227843cf91d425ddba813f0fa4c622c319b58b25dc7817a362cca37a074243"
+      "sha256": "c49f2dc2fcab35ba1105d380c9af72586fe64f9235c0c0bc7f3cf42d877c67db"
     },
     {
       "path": "src/app/(dashboard)/email-inbox/page.tsx",
@@ -21,7 +21,7 @@
     },
     {
       "path": "src/app/(dashboard)/finance/patterns/page.tsx",
-      "sha256": "9fcf361796af69527b5e243265e1149b2f7ef5a36cb038e9f846ad399d42f0a8"
+      "sha256": "5ff337ec4208bb64a4f383a509b284237f16d4a090c3b947bac01f67e6fc9a56"
     },
     {
       "path": "src/app/(dashboard)/finance/settlements/page.tsx",
@@ -45,15 +45,15 @@
     },
     {
       "path": "src/app/(dashboard)/drivers/page.tsx",
-      "sha256": "ecdf9dfb85898adbc26d30472fc8f29236c154c4d180582ae697cc1501d1f17e"
+      "sha256": "568cf843cdb3fe82d3233822ca00cd4762b6f3249ad4faf55f8d115e00c0d36e"
     },
     {
       "path": "src/app/(dashboard)/drivers/[id]/page.tsx",
-      "sha256": "9ddf346af41b1a60b8fb1cc379c03b9452bfbd5c0a0f1799be3d959593cdfeb0"
+      "sha256": "dc8d3308fbf92c01e61d819b880f9c313f2d4d954ced6ec238f6523c8a0ab914"
     },
     {
       "path": "src/components/ui/status-badge.tsx",
-      "sha256": "80611c341acfd766daf63f99b696e64913e0bb6a1a51e603514162490b0dfd35"
+      "sha256": "0f4c0b247ab5e7880f74972cdeed58e2ac6e9ffb7ea165e7e5788dfdd0bc22c5"
     },
     {
       "path": "src/components/ui/source-badge.tsx",
@@ -61,11 +61,11 @@
     },
     {
       "path": "src/components/ui/table.tsx",
-      "sha256": "97db819907cf1d781f8bf215a5fd2f741073617c1b6ce6483cc1d9c248752f41"
+      "sha256": "2df4f4bdd76f62ee4cdcdec10498bf0a5e641baf3ab00d55992a8d6e39aa2e8c"
     },
     {
       "path": "src/components/ui/form-field.tsx",
-      "sha256": "be74a0ae3a13ffe14e721185cf50268424dab6122650329177eb1bdbbbd01df8"
+      "sha256": "af36315c9853ee46d91f32b77e6b57341297b853d8eab503d15f26cb96cf9dc8"
     },
     {
       "path": "src/components/ui/driver-status-badge.tsx",
