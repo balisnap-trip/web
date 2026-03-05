@@ -24,7 +24,7 @@ const FormField = React.forwardRef<HTMLDivElement, FormFieldProps>(
       </Label>
       {children}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
-      {hint ? <p className="text-xs text-gray-500">{hint}</p> : null}
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   )
 )

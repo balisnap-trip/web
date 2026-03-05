@@ -6,6 +6,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { NotificationProvider } from '@/components/notifications/notification-provider'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { Toaster } from '@/components/ui/toaster'
 
 export default function DashboardLayout({
   children,
@@ -40,6 +41,7 @@ export default function DashboardLayout({
             </main>
           </div>
         </div>
+        <Toaster />
       </NotificationProvider>
     </SessionProvider>
   )

@@ -138,13 +138,13 @@ function ModuleTabsInner({
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const module = navItems.find((item) => item.id === moduleId)
-  const tabs = module?.tabs ?? []
+  const currentModule = navItems.find((item) => item.id === moduleId)
+  const tabs = currentModule?.tabs ?? []
 
-  if (!module || tabs.length === 0) return null
+  if (!currentModule || tabs.length === 0) return null
 
-  const tone = toneMap[module.id] || toneMap.dashboard
-  const Icon = iconMap[module.icon]
+  const tone = toneMap[currentModule.id] || toneMap.dashboard
+  const Icon = iconMap[currentModule.icon]
 
   return (
     <div className={cn('mb-4', className)}>
@@ -176,7 +176,7 @@ function ModuleTabsInner({
             <div className={cn('flex h-9 w-9 items-center justify-center rounded-xl', tone.iconBg)}>
               {Icon ? <Icon className={cn('h-5 w-5', tone.iconFg)} /> : null}
             </div>
-            <div className="text-base font-semibold text-slate-900">{module.title}</div>
+            <div className="text-base font-semibold text-slate-900">{currentModule.title}</div>
           </div>
         </div>
       </div>
