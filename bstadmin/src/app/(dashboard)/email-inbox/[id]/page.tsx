@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { formatDateTime } from '@/lib/date-format'
 import { ArrowLeft, Mail, Trash2, AlertCircle, Link2 } from 'lucide-react'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -36,6 +37,7 @@ export default function EmailDetailPage({ params }: { params: Promise<{ id: stri
   const [email, setEmail] = useState<EmailDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const { notify } = useNotifications()
 
   useEffect(() => {
@@ -59,7 +61,6 @@ export default function EmailDetailPage({ params }: { params: Promise<{ id: stri
 
   const handleDelete = async () => {
     if (!email) return
-    if (!confirm(`Delete email "${email.subject}"? This cannot be undone.`)) return
 
     setDeleting(true)
     try {
@@ -122,7 +123,7 @@ export default function EmailDetailPage({ params }: { params: Promise<{ id: stri
 
         <Button
           variant="outline"
-          onClick={handleDelete}
+          onClick={() => setShowDeleteDialog(true)}
           disabled={deleting}
           className="text-red-600 hover:text-red-700 hover:bg-red-50"
         >
@@ -215,6 +216,18 @@ export default function EmailDetailPage({ params }: { params: Promise<{ id: stri
           </pre>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          if (!deleting) setShowDeleteDialog(open)
+        }}
+        title="Delete Email"
+        description={`Delete email "${email.subject}"? This action cannot be undone.`}
+        confirmLabel="Delete Email"
+        confirming={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { ModuleTabs } from '@/components/layout/module-tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -56,6 +57,8 @@ export default function FinanceTourItemCategoriesPage() {
   const [showWarning, setShowWarning] = useState(true)
   const [editingCategory, setEditingCategory] = useState<TourItemCategory | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<TourItemCategory | null>(null)
   const { notify } = useNotifications()
 
   const [formData, setFormData] = useState({
@@ -176,20 +179,27 @@ export default function FinanceTourItemCategoriesPage() {
     }
   }
 
-  const handleDelete = async (category: TourItemCategory) => {
-    if (!confirm(`Deactivate category ${category.name}?`)) return
+  const handleDelete = (category: TourItemCategory) => {
+    setDeleteTarget(category)
+  }
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      const res = await fetch(`/api/tour-item-categories/${category.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/tour-item-categories/${deleteTarget.id}`, { method: 'DELETE' })
       const data = await res.json()
       if (data.success) {
         notify({ type: 'success', title: 'Category Deactivated' })
+        setDeleteTarget(null)
         fetchCategories()
       } else {
         notify({ type: 'error', title: 'Delete Failed', message: data.error || 'Unable to update category' })
       }
     } catch (error) {
       notify({ type: 'error', title: 'Delete Error', message: String(error) })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -277,6 +287,7 @@ export default function FinanceTourItemCategoriesPage() {
                 size="sm"
                 className="text-red-600 hover:text-red-700"
                 onClick={() => handleDelete(category)}
+                disabled={deleting}
               >
                 <Trash2 className="h-4 w-4 mr-1" />
                 Deactivate
@@ -420,6 +431,22 @@ export default function FinanceTourItemCategoriesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null)
+        }}
+        title="Deactivate Category"
+        description={
+          deleteTarget
+            ? `Deactivate category "${deleteTarget.name}"? This action will affect finance workflows.`
+            : undefined
+        }
+        confirmLabel="Deactivate"
+        confirming={deleting}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   )
 }

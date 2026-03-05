@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { ModuleTabs } from '@/components/layout/module-tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -85,6 +86,8 @@ export default function FinancePatternsPage() {
   const [editingPattern, setEditingPattern] = useState<Pattern | null>(null)
   const [expandedPatternIds, setExpandedPatternIds] = useState<number[]>([])
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Pattern | null>(null)
   const { notify } = useNotifications()
 
   const [formData, setFormData] = useState({
@@ -320,20 +323,27 @@ export default function FinancePatternsPage() {
     }
   }
 
-  const handleDelete = async (pattern: Pattern) => {
-    if (!confirm(`Delete template ${pattern.name}?`)) return
+  const handleDelete = (pattern: Pattern) => {
+    setDeleteTarget(pattern)
+  }
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      const res = await fetch(`/api/finance/patterns/${pattern.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/finance/patterns/${deleteTarget.id}`, { method: 'DELETE' })
       const data = await res.json()
       if (data.success) {
         notify({ type: 'success', title: 'Template Deleted' })
+        setDeleteTarget(null)
         fetchAll()
       } else {
         notify({ type: 'error', title: 'Delete Failed', message: data.error || 'Unable to delete template' })
       }
     } catch (error) {
       notify({ type: 'error', title: 'Delete Error', message: String(error) })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -453,6 +463,7 @@ export default function FinancePatternsPage() {
                     size="sm"
                     className="text-red-600 hover:text-red-700"
                     onClick={() => handleDelete(pattern)}
+                    disabled={deleting}
                   >
                     <Trash2 className="h-4 w-4 mr-1" />
                     Delete
@@ -692,6 +703,22 @@ export default function FinancePatternsPage() {
             </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null)
+        }}
+        title="Delete Cost Template"
+        description={
+          deleteTarget
+            ? `Delete template "${deleteTarget.name}"? This action cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete Template"
+        confirming={deleting}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   )
 }

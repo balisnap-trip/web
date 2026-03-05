@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DriverStatusBadge } from '@/components/ui/driver-status-badge'
 import {
   Dialog,
@@ -44,6 +45,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
   const [driver, setDriver] = useState<DriverDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const { notify } = useNotifications()
@@ -91,7 +93,6 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
 
   const handleDelete = async () => {
     if (!driver) return
-    if (!confirm(`Delete driver ${driver.name}? This cannot be undone.`)) return
 
     setDeleting(true)
     try {
@@ -193,7 +194,7 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
           </Button>
           <Button
             variant="outline"
-            onClick={handleDelete}
+            onClick={() => setShowDeleteDialog(true)}
             disabled={deleting}
             className="text-red-600 hover:text-red-700 hover:bg-red-50"
           >
@@ -441,6 +442,18 @@ export default function DriverDetailPage({ params }: { params: Promise<{ id: str
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          if (!deleting) setShowDeleteDialog(open)
+        }}
+        title="Delete Driver"
+        description={`Delete driver "${driver.name}"? This action cannot be undone.`}
+        confirmLabel="Delete Driver"
+        confirming={deleting}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

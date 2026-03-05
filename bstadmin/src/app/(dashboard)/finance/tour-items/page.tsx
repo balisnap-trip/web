@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { ModuleTabs } from '@/components/layout/module-tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -66,6 +67,8 @@ export default function FinanceTourItemsPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingItem, setEditingItem] = useState<ServiceItem | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<ServiceItem | null>(null)
   const { notify } = useNotifications()
 
   const [formData, setFormData] = useState({
@@ -180,20 +183,27 @@ export default function FinanceTourItemsPage() {
     }
   }
 
-  const handleDelete = async (item: ServiceItem) => {
-    if (!confirm(`Delete item ${item.name}?`)) return
+  const handleDelete = (item: ServiceItem) => {
+    setDeleteTarget(item)
+  }
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
     try {
-      const res = await fetch(`/api/service-items/${item.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/service-items/${deleteTarget.id}`, { method: 'DELETE' })
       const data = await res.json()
       if (data.success) {
         notify({ type: 'success', title: 'Item Deleted' })
+        setDeleteTarget(null)
         fetchAll()
       } else {
         notify({ type: 'error', title: 'Delete Failed', message: data.error || 'Unable to delete item' })
       }
     } catch (error) {
       notify({ type: 'error', title: 'Delete Error', message: String(error) })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -260,6 +270,7 @@ export default function FinanceTourItemsPage() {
                 size="sm"
                 className="text-red-600 hover:text-red-700"
                 onClick={() => handleDelete(item)}
+                disabled={deleting}
               >
                 <Trash2 className="h-4 w-4 mr-1" />
                 Delete
@@ -407,6 +418,22 @@ export default function FinanceTourItemsPage() {
             </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null)
+        }}
+        title="Delete Tour Item"
+        description={
+          deleteTarget
+            ? `Delete item "${deleteTarget.name}"? This action cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete Item"
+        confirming={deleting}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   )
 }

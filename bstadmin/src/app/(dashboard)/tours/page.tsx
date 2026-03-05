@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { ModuleTabs } from '@/components/layout/module-tabs'
 import {
   Dialog,
@@ -73,6 +74,12 @@ function ToursPageInner() {
   const [editingTour, setEditingTour] = useState<Tour | null>(null)
   const [editingPackage, setEditingPackage] = useState<TourPackage | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'tour' | 'package'
+    id: number
+    name: string
+  } | null>(null)
   const { notify } = useNotifications()
 
   const [tourForm, setTourForm] = useState({
@@ -253,35 +260,38 @@ function ToursPageInner() {
     }
   }
 
-  const handleDeleteTour = async (tour: Tour) => {
-    if (!confirm(`Delete tour ${tour.tourName}?`)) return
-    try {
-      const res = await fetch(`/api/tours/${tour.id}`, { method: 'DELETE' })
-      const data = await res.json()
-      if (data.success) {
-        notify({ type: 'success', title: 'Tour Deleted' })
-        fetchAll()
-      } else {
-        notify({ type: 'error', title: 'Delete Failed', message: data.error || 'Unable to delete tour' })
-      }
-    } catch (error) {
-      notify({ type: 'error', title: 'Delete Error', message: String(error) })
-    }
+  const handleDeleteTour = (tour: Tour) => {
+    setDeleteTarget({ type: 'tour', id: tour.id, name: tour.tourName })
   }
 
-  const handleDeletePackage = async (pkg: TourPackage) => {
-    if (!confirm(`Delete package ${pkg.packageName}?`)) return
+  const handleDeletePackage = (pkg: TourPackage) => {
+    setDeleteTarget({ type: 'package', id: pkg.id, name: pkg.packageName })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+
+    const endpoint =
+      deleteTarget.type === 'tour'
+        ? `/api/tours/${deleteTarget.id}`
+        : `/api/tour-packages/${deleteTarget.id}`
+    const successTitle = deleteTarget.type === 'tour' ? 'Tour Deleted' : 'Package Deleted'
+
     try {
-      const res = await fetch(`/api/tour-packages/${pkg.id}`, { method: 'DELETE' })
+      const res = await fetch(endpoint, { method: 'DELETE' })
       const data = await res.json()
       if (data.success) {
-        notify({ type: 'success', title: 'Package Deleted' })
+        notify({ type: 'success', title: successTitle })
+        setDeleteTarget(null)
         fetchAll()
       } else {
-        notify({ type: 'error', title: 'Delete Failed', message: data.error || 'Unable to delete package' })
+        notify({ type: 'error', title: 'Delete Failed', message: data.error || 'Unable to delete item' })
       }
     } catch (error) {
       notify({ type: 'error', title: 'Delete Error', message: String(error) })
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -344,7 +354,13 @@ function ToursPageInner() {
                   <Button size="sm" variant="outline" onClick={() => openPackageEdit(pkg)}>
                     <Edit className="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => handleDeletePackage(pkg)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => handleDeletePackage(pkg)}
+                    disabled={deleting}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -380,7 +396,13 @@ function ToursPageInner() {
                   <Button size="sm" variant="outline" onClick={() => openTourEdit(tour)}>
                     <Edit className="h-4 w-4" />
                   </Button>
-                  <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => handleDeleteTour(tour)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 hover:text-red-700"
+                    onClick={() => handleDeleteTour(tour)}
+                    disabled={deleting}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
@@ -557,6 +579,22 @@ function ToursPageInner() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open && !deleting) setDeleteTarget(null)
+        }}
+        title={deleteTarget?.type === 'tour' ? 'Delete Tour' : 'Delete Package'}
+        description={
+          deleteTarget
+            ? `Delete ${deleteTarget.type} "${deleteTarget.name}"? This action cannot be undone.`
+            : undefined
+        }
+        confirmLabel={deleteTarget?.type === 'tour' ? 'Delete Tour' : 'Delete Package'}
+        confirming={deleting}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   )
 }
